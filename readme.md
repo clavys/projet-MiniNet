@@ -111,3 +111,177 @@ Ce tableau illustre la correspondance entre notre métamodèle, l'architecture c
 | **Connecteur** | `RPC_Auth` | `Connector RPC_Auth = { Role caller; Role called; }` |
 | **Service** | `login()` | `Property login_service : ServiceType;` |
 | **Attachment** | Liaison Client-RPC | `Attachment Client.p_auth to RPC_Auth.caller;` |
+
+Voici la suite de votre rapport, formatée en **Markdown (.md)**. Elle reprend exactement là où la partie précédente s'est arrêtée.
+
+Cette section couvre la spécification formelle (ACME), la justification des choix (crucial pour la note) et les détails d'implémentation.
+
+-----
+
+
+## 3. Spécification Formelle (ACME)
+
+Cette section présente la description formelle de l'architecture du système MiniNet en utilisant une syntaxe proche du langage de description d'architecture (ADL) ACME. Cette formalisation permet de vérifier la cohérence structurelle de notre assemblage.
+
+```acme
+System MiniNet = {
+
+  // --- DÉCLARATION DES COMPOSANTS ---
+
+  Component Client = {
+      Port p_auth_req;  // Vers UserManager
+      Port p_post_req;  // Vers PostManager
+      Port p_msg_req;   // Vers MessageService
+  }
+
+  Component UserManager = {
+      Port p_auth_prov; // Reçoit auth
+      Port p_db_user;   // Vers Storage
+      Property services = { "login", "register", "addFriend", "removeFriend" };
+  }
+
+  Component PostManager = {
+      Port p_post_prov; // Reçoit commandes posts
+      Port p_db_post;   // Vers Storage
+      Property services = { "createPost", "getWall" };
+  }
+
+  Component MessageService = {
+      Port p_msg_prov;  // Reçoit commandes messages
+      Port p_db_msg;    // Vers Storage
+      Property services = { "sendMessage", "readMessages" };
+  }
+
+  Component Storage = {
+      Port p_db_prov;   // Fournit accès données
+      Property engine = "In-Memory / SQL Simulation";
+  }
+
+  // --- DÉCLARATION DES CONNECTEURS ---
+
+  // Connecteur générique RPC pour les interactions Client -> Managers
+  Connector RPC_Auth_Conn = {
+      Role caller;
+      Role called;
+      Property glue = "Synchronous Call-Return";
+  }
+
+  Connector RPC_Post_Conn = {
+      Role caller;
+      Role called;
+      Property glue = "Synchronous Call-Return";
+  }
+
+  Connector RPC_Msg_Conn = {
+      Role caller;
+      Role called;
+      Property glue = "Synchronous Call-Return";
+  }
+
+  // Connecteur de données pour l'accès au stockage
+  Connector SQL_Link = {
+      Role requester;
+      Role responder;
+      Property glue = "JDBC / Query Transport";
+  }
+
+  // --- ATTACHMENTS (Câblage du système) ---
+
+  // 1. Connexions Client -> Managers
+  Attachment Client.p_auth_req to RPC_Auth_Conn.caller;
+  Attachment RPC_Auth_Conn.called to UserManager.p_auth_prov;
+
+  Attachment Client.p_post_req to RPC_Post_Conn.caller;
+  Attachment RPC_Post_Conn.called to PostManager.p_post_prov;
+
+  Attachment Client.p_msg_req to RPC_Msg_Conn.caller;
+  Attachment RPC_Msg_Conn.called to MessageService.p_msg_prov;
+
+  // 2. Connexions Managers -> Storage (Multiplexage sur le connecteur SQL)
+  Attachment UserManager.p_db_user to SQL_Link.requester;
+  Attachment PostManager.p_db_post to SQL_Link.requester;
+  Attachment MessageService.p_db_msg to SQL_Link.requester;
+  
+  Attachment SQL_Link.responder to Storage.p_db_prov;
+}
+```
+
+-----
+
+## 4\. Justification des Choix Architecturaux
+
+La conception de MiniNet repose sur plusieurs décisions clés visant à garantir la modularité, l'évolutivité et la maintenabilité du système.
+
+### 4.1 Séparation des Préoccupations (Managers vs Monolithe)
+
+Nous avons choisi de ne pas créer un seul composant "Serveur" monolithique, mais de diviser la logique métier en trois composants distincts : `UserManager`, `PostManager` et `MessageService`.
+
+  * **Justification :** Cette approche permet une évolution indépendante. Par exemple, si la logique de gestion des amis (`UserManager`) devient complexe, elle peut être modifiée sans impacter le service de messagerie. Cela facilite également le travail en parallèle au sein de l'équipe de développement.
+
+### 4.2 Centralisation du Stockage (Composant Storage)
+
+Bien que les managers soient séparés, nous avons opté pour un composant `Storage` unique accessible via un connecteur de données dédié.
+
+  * **Justification :** Cela simplifie la cohérence des données (toutes les données sont au même endroit). L'utilisation d'un connecteur explicite (`SQL_Link`) découple les managers de la technologie de stockage. Si nous devions passer d'une base SQL à une base NoSQL ou un fichier texte, seul le code interne du connecteur et du composant `Storage` changerait, sans affecter la logique métier des Managers.
+
+### 4.3 Choix du style "Call-Return" (RPC Synchrone)
+
+Pour les interactions entre le Client et les Managers, nous utilisons une Glue de type RPC Synchrone.
+
+  * **Justification :** L'expérience utilisateur (UX) d'un réseau social nécessite souvent un retour immédiat (savoir si le login a réussi, si le message est envoyé). Un modèle asynchrone aurait complexifié inutilement le client (gestion de callbacks) pour ce type d'opérations simples.
+
+-----
+
+## 5\. Implémentation et Traçabilité (Prototype)
+
+Le prototype a été développé en Java en respectant strictement le métamodèle M2 défini. L'objectif n'était pas d'utiliser des frameworks standards (comme Spring), mais de réifier les concepts architecturaux dans le code.
+
+### 5.1 Structure du Code (Packages)
+
+L'organisation des fichiers reflète la distinction entre le métamodèle et l'application concrète :
+
+  * `src/framework/` : Contient les classes abstraites du M2 (`Component`, `Connector`, `Port`, `Role`). Ce code est générique et réutilisable pour d'autres projets.
+  * `src/architecture/components/` : Contient les implémentations M1 (`UserManager.java`, `Client.java`, etc.).
+  * `src/architecture/connectors/` : Contient les connecteurs spécifiques (`RPCConnector.java`).
+  * `src/Main.java` : Joue le rôle de la **Configuration**, instanciant les composants et tissant les liens (Attachments).
+
+### 5.2 Mapping Architecture $\leftrightarrow$ Code Java
+
+Pour garantir la traçabilité exigée, nous avons adopté les conventions de mappage suivantes :
+
+| Concept Architectural | Implémentation Java | Explication |
+| :--- | :--- | :--- |
+| **Port (Provided)** | **Interface Java** | Une interface (ex: `IAuthService`) définit le contrat public du port. |
+| **Port (Required)** | **Champ privé** | Le besoin d'un service externe est représenté par une référence privée vers l'interface (ex: `private IStorage storagePort;`). |
+| **Composant** | **Classe** | Une classe Java qui *implements* les interfaces de ses ports fournis. |
+| **Attachment** | **Injection de dépendance** | Lier un port revient à passer l'instance du connecteur ou du composant via un *setter* ou le constructeur dans le `Main`. |
+
+### 5.3 Extrait de code significatif
+
+Cet extrait du `Main.java` montre comment la configuration architecturale est traduite en code :
+
+```java
+// 1. Instanciation des Composants
+UserManager userMgr = new UserManager();
+Client client = new Client();
+
+// 2. Instanciation du Connecteur
+RPCConnector authConnector = new RPCConnector();
+
+// 3. Attachment (Câblage)
+// Le connecteur est relié au composant fourni (UserManager)
+authConnector.setDestination(userMgr);
+// Le composant requis (Client) reçoit le connecteur
+client.setAuthPort(authConnector);
+```
+
+-----
+
+## Conclusion
+
+Ce projet a permis de mettre en pratique les principes de l'architecture logicielle basée sur les composants et connecteurs. En partant d'un métamodèle (M2) clair, nous avons pu concevoir une architecture (M1) modulaire pour le système MiniNet.
+
+L'implémentation du prototype a mis en évidence l'intérêt de cette approche : bien que plus verbeuse initialement que du code "spaghetti", elle offre une structure rigide qui force le découplage. Le système final respecte les contraintes de séparation et permettrait, théoriquement, de remplacer n'importe quel composant (comme la base de données ou l'interface client) sans impact majeur sur le reste du système.
+
+```
+```
