@@ -1,0 +1,166 @@
+@startuml
+skinparam backgroundColor white
+skinparam object {
+    BackgroundColor<<Composant>> AliceBlue
+    BorderColor<<Composant>> DeepSkyBlue
+    BackgroundColor<<Connecteur>> MistyRose
+    BorderColor<<Connecteur>> FireBrick
+    BackgroundColor<<Port>> Gold
+    BackgroundColor<<Role>> LightGreen
+    ArrowColor Black
+}
+
+title Diagramme M1 : Architecture MiniNet (Compatible)
+
+package "Configuration : MiniNetSystem" {
+
+    ' ==========================================
+    ' 1. DEFINITION DES COMPOSANTS (INSTANCES)
+    ' ==========================================
+
+    object "Client : Composant" as Client <<Composant>>
+    Client : nom = "Client Console/Web"
+
+    object "p_auth_req : RequiredPort" as p_cl_auth <<Port>>
+    object "p_post_req : RequiredPort" as p_cl_post <<Port>>
+    object "p_msg_req : RequiredPort" as p_cl_msg <<Port>>
+
+    object "UserManager : Composant" as UserMgr <<Composant>>
+    UserMgr : nom = "Gestion Utilisateurs"
+
+    object "s_login : ProvidedService" as s_login
+    s_login : nom = "login()"
+    
+    object "s_reg : ProvidedService" as s_reg
+    s_reg : nom = "register()"
+
+    object "p_auth_prov : ProvidedPort" as p_um_auth <<Port>>
+    object "p_db_user : RequiredPort" as p_um_db <<Port>>
+
+    object "PostManager : Composant" as PostMgr <<Composant>>
+    PostMgr : nom = "Gestion Publications"
+
+    object "s_post : ProvidedService" as s_createPost
+    s_createPost : nom = "createPost()"
+
+    object "s_wall : ProvidedService" as s_getWall
+    s_getWall : nom = "getWall()"
+
+    object "p_post_prov : ProvidedPort" as p_pm_post <<Port>>
+    object "p_db_post : RequiredPort" as p_pm_db <<Port>>
+
+    object "MessageService : Composant" as MsgSvc <<Composant>>
+    MsgSvc : nom = "Messagerie Privée"
+
+    object "s_send : ProvidedService" as s_sendMsg
+    s_sendMsg : nom = "sendMessage()"
+
+    object "p_msg_prov : ProvidedPort" as p_ms_msg <<Port>>
+    object "p_db_msg : RequiredPort" as p_ms_db <<Port>>
+
+    object "Storage : Composant" as Storage <<Composant>>
+    Storage : nom = "Base de Données"
+
+    object "s_save : ProvidedService" as s_save
+    s_save : nom = "save()"
+
+    object "s_find : ProvidedService" as s_find
+    s_find : nom = "find()"
+
+    object "p_db_prov : ProvidedPort" as p_st_main <<Port>>
+
+
+    ' ==========================================
+    ' 2. DEFINITION DES CONNECTEURS (INSTANCES)
+    ' ==========================================
+
+    object "RPC_Auth : Connecteur" as C_Auth <<Connecteur>>
+    C_Auth : glue = "Call-Return RPC"
+
+    object "caller : Role" as r_auth_caller <<Role>>
+    object "called : Role" as r_auth_called <<Role>>
+
+    object "RPC_Post : Connecteur" as C_Post <<Connecteur>>
+    C_Post : glue = "Call-Return RPC"
+
+    object "caller : Role" as r_post_caller <<Role>>
+    object "called : Role" as r_post_called <<Role>>
+
+    object "RPC_Msg : Connecteur" as C_Msg <<Connecteur>>
+    C_Msg : glue = "Call-Return RPC"
+
+    object "caller : Role" as r_msg_caller <<Role>>
+    object "called : Role" as r_msg_called <<Role>>
+
+    object "SQL_Link : Connecteur" as C_SQL <<Connecteur>>
+    C_SQL : glue = "JDBC / SQL Query"
+
+    object "requester : Role" as r_sql_req <<Role>>
+    object "responder : Role" as r_sql_res <<Role>>
+
+    ' ==========================================
+    ' 3. RELATIONS DE COMPOSITION
+    ' ==========================================
+
+    ' Client contient ses ports
+    Client *-- p_cl_auth
+    Client *-- p_cl_post
+    Client *-- p_cl_msg
+
+    ' UserManager contient ses ports et services
+    UserMgr *-- p_um_auth
+    UserMgr *-- p_um_db
+    UserMgr *-- s_login
+    UserMgr *-- s_reg
+
+    ' PostManager contient ses ports et services
+    PostMgr *-- p_pm_post
+    PostMgr *-- p_pm_db
+    PostMgr *-- s_createPost
+    PostMgr *-- s_getWall
+
+    ' MsgService contient ses ports et services
+    MsgSvc *-- p_ms_msg
+    MsgSvc *-- p_ms_db
+    MsgSvc *-- s_sendMsg
+
+    ' Storage contient ses ports et services
+    Storage *-- p_st_main
+    Storage *-- s_save
+    Storage *-- s_find
+
+    ' Connecteurs contiennent leurs rôles
+    C_Auth *-- r_auth_caller
+    C_Auth *-- r_auth_called
+    C_Post *-- r_post_caller
+    C_Post *-- r_post_called
+    C_Msg  *-- r_msg_caller
+    C_Msg  *-- r_msg_called
+    C_SQL  *-- r_sql_req
+    C_SQL  *-- r_sql_res
+
+    ' ==========================================
+    ' 4. ATTACHMENTS (Lien Port <-> Role)
+    ' ==========================================
+
+    ' Connexion Client -> UserManager
+    p_cl_auth ..> r_auth_caller : <<Attachment>>
+    r_auth_called ..> p_um_auth : <<Attachment>>
+
+    ' Connexion Client -> PostManager
+    p_cl_post ..> r_post_caller : <<Attachment>>
+    r_post_called ..> p_pm_post : <<Attachment>>
+
+    ' Connexion Client -> MessageService
+    p_cl_msg ..> r_msg_caller : <<Attachment>>
+    r_msg_called ..> p_ms_msg : <<Attachment>>
+
+    ' Connexion Managers -> Storage
+    p_um_db ..> r_sql_req : <<Attachment>>
+    p_pm_db ..> r_sql_req : <<Attachment>>
+    p_ms_db ..> r_sql_req : <<Attachment>>
+    
+    r_sql_res ..> p_st_main : <<Attachment>>
+
+}
+@enduml
