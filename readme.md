@@ -236,14 +236,50 @@ Pour les interactions entre le Client et les Managers, nous utilisons une Glue d
 
 Le prototype a été développé en Java en respectant strictement le métamodèle M2 défini. L'objectif n'était pas d'utiliser des frameworks standards (comme Spring), mais de réifier les concepts architecturaux dans le code.
 
+
 ### 5.1 Structure du Code (Packages)
 
-L'organisation des fichiers reflète la distinction entre le métamodèle et l'application concrète :
+L'organisation des fichiers du prototype a été conçue pour mettre en évidence la traçabilité explicite entre l'architecture définie et le code, conformément aux objectifs du projet. Elle reflète la distinction stricte entre le niveau d'abstraction (M2) et l'application concrète (M1).
 
-  * `src/framework/` : Contient les classes abstraites du M2 (`Component`, `Connector`, `Port`, `Role`). Ce code est générique et réutilisable pour d'autres projets.
-  * `src/architecture/components/` : Contient les implémentations M1 (`UserManager.java`, `Client.java`, etc.).
-  * `src/architecture/connectors/` : Contient les connecteurs spécifiques (`RPCConnector.java`).
-  * `src/Main.java` : Joue le rôle de la **Configuration**, instanciant les composants et tissant les liens (Attachments).
+Voici l'arborescence détaillée du projet Java :
+
+```text
+src/
+├── framework/                 <-- Niveau M2 (Abstractions)
+│   ├── Component.java         (Classe abstraite de base)
+│   └── Connector.java         (Classe abstraite de base)
+│
+├── architecture/              <-- Niveau M1 (Implémentation MiniNet)
+│   ├── interfaces/            (Réification des Ports Fournis)
+│   │   ├── IUserPort.java
+│   │   ├── IPostPort.java
+│   │   └── IStoragePort.java
+│   │
+│   ├── components/            (Instances de Composants)
+│   │   ├── Client.java
+│   │   ├── UserManager.java
+│   │   ├── PostManager.java
+│   │   └── Storage.java
+│   │
+│   └── connectors/            (Instances de Connecteurs)
+│       ├── RPCConnector.java
+│       └── SQLConnector.java
+│
+└── Main.java                  <-- Configuration (Instanciation & Binding)
+```
+
+**Description des paquetages :**
+
+  * **`src/framework/`** : Ce package implémente les concepts du métamodèle architectural défini dans notre diagramme de classe M2. Il contient les classes abstraites `Component` et `Connector` héritant de la notion d'élément architectural. Ce code est générique et garantit que le prototype respecte la structure définie.
+  * **`src/architecture/interfaces/`** : Ce package contient les définitions des **Ports Fournis**. Dans notre implémentation, les ports sont modélisés par des interfaces Java, respectant le principe selon lequel le composant contient directement ses définitions de services.
+  * **`src/architecture/components/`** : Contient les implémentations concrètes des composants fonctionnels qui encapsulent les fonctionnalités du système (Gestion utilisateurs, Posts, etc.). Ces classes héritent de `framework.Component`.
+  * **`src/architecture/connectors/`** : Contient la logique de "Glue" encapsulée dans des classes héritant de `framework.Connector`. Ces classes définissent concrètement les modes d'interaction (appel de procédure RPC ou requête SQL) entre les composants.
+  * **`src/Main.java`** : Ce fichier représente la classe **Configuration** du métamodèle M2. Elle a la responsabilité de contenir les instances et les liens. C'est ici que sont instanciés les composants et que les liens d'attachement (*Attachments*) sont créés pour assembler le système final.
+
+<!-- end list -->
+
+```
+```
 
 ### 5.2 Mapping Architecture $\leftrightarrow$ Code Java
 
