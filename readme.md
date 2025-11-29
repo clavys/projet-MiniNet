@@ -261,23 +261,12 @@ Pour garantir la traçabilité exigée, nous avons adopté les conventions de ma
 Cet extrait du `Main.java` montre comment la configuration architecturale est traduite en code :
 
 ```java
-// 1. Instanciation des Composants
-UserManager userMgr = new UserManager();
-Client client = new Client();
 
-// 2. Instanciation du Connecteur
-RPCConnector authConnector = new RPCConnector();
-
-// 3. Attachment (Câblage)
-// Le connecteur est relié au composant fourni (UserManager)
-authConnector.setDestination(userMgr);
-// Le composant requis (Client) reçoit le connecteur
-client.setAuthPort(authConnector);
 ```
 
 -----
 
-## Conclusion
+## Conclusion tentative
 
 Ce projet a permis de mettre en pratique les principes de l'architecture logicielle basée sur les composants et connecteurs. En partant d'un métamodèle (M2) clair, nous avons pu concevoir une architecture (M1) modulaire pour le système MiniNet.
 
