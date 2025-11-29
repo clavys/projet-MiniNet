@@ -8,7 +8,7 @@ public class Client extends Component {
 
     // Le câble vers le monde extérieur
     private RPCConnector authConnector;
-
+    private RPCConnector msgConnector;
     public Client() {
         super("Client Console");
     }
@@ -16,6 +16,9 @@ public class Client extends Component {
     // Binding : On branche le câble
     public void setAuthConnector(RPCConnector connector) {
         this.authConnector = connector;
+    }
+    public void setMsgConnector(RPCConnector c) {
+        this.msgConnector = c;
     }
 
     // La boucle principale (L'interface graphique du pauvre)
