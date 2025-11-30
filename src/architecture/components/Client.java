@@ -143,6 +143,21 @@ public class Client extends Component {
         System.out.println(wall);
     }
 
+    private void handleAddFriend(Scanner scanner) {
+        System.out.print("Nom de l'ami à ajouter : ");
+        String friend = scanner.nextLine();
+        // Appel via authConnector (car c'est le UserManager qui gère ça)
+        authConnector.callAddFriend(currentUser, friend);
+        System.out.println(">> Ami ajouté (simulé) !");
+    }
+
+    private void handleRemoveFriend(Scanner scanner) {
+        System.out.print("Nom de l'ami à supprimer : ");
+        String friend = scanner.nextLine();
+        authConnector.callRemoveFriend(currentUser, friend);
+        System.out.println(">> Ami supprimé !");
+    }
+
     // Utilitaire pour sécuriser le menu
     private boolean checkAuth() {
         if (currentUser == null) {

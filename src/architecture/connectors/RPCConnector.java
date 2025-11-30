@@ -67,6 +67,24 @@ public class RPCConnector extends Connector {
         }
     }
 
+    public void callAddFriend(String currentUser, String friendName) {
+        if (userPort != null) {
+            printLog(">> addFriend(" + currentUser + ", " + friendName + ")");
+            userPort.addFriend(currentUser, friendName);
+        } else {
+            printError("AddFriend", "UserManager");
+        }
+    }
+
+    public void callRemoveFriend(String currentUser, String friendName) {
+        if (userPort != null) {
+            printLog(">> removeFriend(" + currentUser + ", " + friendName + ")");
+            userPort.removeFriend(currentUser, friendName);
+        } else {
+            printError("RemoveFriend", "UserManager");
+        }
+    }
+
     // SERVICES MESSAGERIE (Relayés vers MessageService)
 
 

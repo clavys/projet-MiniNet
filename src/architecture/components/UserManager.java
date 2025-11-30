@@ -46,4 +46,27 @@ public class UserManager extends Component implements IUserPort {
             return false;
         }
     }
+
+    @Override
+    public void addFriend(String currentUser, String newFriend) {
+        // Clé unique pour la relation
+        String relationKey = currentUser + "_" + newFriend;
+
+        printLog("Ajout de l'ami : " + newFriend + " pour " + currentUser);
+
+        // On sauvegarde dans la table FRIENDS
+        // On pourrait vérifier si newFriend existe dans USERS avant,
+        // mais pour le prototype on suppose que oui.
+        dbConnector.saveRecord("FRIENDS", relationKey, "STATUS=ACCEPTED");
+    }
+
+    @Override
+    public void removeFriend(String currentUser, String oldFriend) {
+        String relationKey = currentUser + "_" + oldFriend;
+        printLog("Suppression de l'ami : " + oldFriend);
+
+        // Note: Notre interface IStoragePort n'a pas de "delete" dans l'exemple précédent.
+        // Si vous l'avez ajoutée c'est bien, sinon on peut juste ignorer ou mettre "STATUS=DELETED"
+        dbConnector.saveRecord("FRIENDS", relationKey, "STATUS=DELETED");
+    }
 }
