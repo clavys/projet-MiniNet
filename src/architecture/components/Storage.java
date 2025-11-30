@@ -42,6 +42,14 @@ public class Storage extends Component implements IStoragePort {
     }
 
     @Override
+    public Map<String, String> selectAll(String tableName) {
+        if (database.containsKey(tableName)) {
+            return new HashMap<>(database.get(tableName));
+        }
+        return new HashMap<>();
+    }
+
+    @Override
     public boolean exists(String tableName, String key) {
         return database.containsKey(tableName) && database.get(tableName).containsKey(key);
     }
@@ -51,5 +59,13 @@ public class Storage extends Component implements IStoragePort {
         if(database.containsKey(tableName)) {
             database.get(tableName).remove(key);
         }
+    }
+
+    @Override
+    public Map<String, String> findAll(String tableName) {
+        if (database.containsKey(tableName)) {
+            return new HashMap<>(database.get(tableName));
+        }
+        return new HashMap<>();
     }
 }

@@ -3,6 +3,9 @@ package architecture.connectors;
 import framework.Connector;
 import architecture.interfaces.IStoragePort;
 
+import java.util.Collections;
+import java.util.Map;
+
 public class SQLConnector extends Connector {
 
     private IStoragePort storagePort;
@@ -27,5 +30,12 @@ public class SQLConnector extends Connector {
 
     public String findRecord(String table, String key) {
         return storagePort.select(table, key);
+    }
+
+    public Map<String, String> findAllRecords(String table) {
+        if (storagePort != null) {
+            return storagePort.findAll(table);
+        }
+        return Collections.emptyMap();
     }
 }

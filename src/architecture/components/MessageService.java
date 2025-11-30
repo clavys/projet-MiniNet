@@ -4,6 +4,8 @@ import framework.Component;
 import architecture.interfaces.IMessagePort;
 import architecture.connectors.SQLConnector;
 
+import java.util.Map;
+
 public class MessageService extends Component implements IMessagePort {
 
     private SQLConnector dbConnector;
@@ -30,10 +32,14 @@ public class MessageService extends Component implements IMessagePort {
 
     @Override
     public String checkMessages(String user) {
-        // NOTE : Dans une vraie DB, on ferait "SELECT * FROM MESSAGES WHERE TO=user"
-        // Ici, notre Storage simulé est basique (clé/valeur).
-        // Pour simplifier l'exercice, on va juste simuler la lecture.
-        printLog("Lecture de la boîte de réception de " + user);
-        return "Vous avez 0 nouveaux messages (Simulation)";
+        Map<String, String> allMsgs = dbConnector.findAllRecords("MESSAGES"); // Supposez que vous exposez selectAll dans le connecteur
+        StringBuilder sb = new StringBuilder();
+        for (String val : allMsgs.values()) {
+            // Format stocké : "DESTINATAIRE:CONTENU"
+            if (val.startsWith(user + ":")) {
+                sb.append("- ").append(val.split(":")[1]).append("\n");
+            }
+        }
+        return !sb.isEmpty() ? sb.toString() : "Aucun message.";
     }
 }
