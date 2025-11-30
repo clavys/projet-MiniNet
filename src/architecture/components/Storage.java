@@ -17,6 +17,7 @@ public class Storage extends Component implements IStoragePort {
         // On initialise les "tables"
         this.database.put("USERS", new HashMap<>());
         this.database.put("POSTS", new HashMap<>());
+        this.database.put("MESSAGES", new HashMap<>());
 
         printLog("Service de stockage démarré (In-Memory).");
     }
