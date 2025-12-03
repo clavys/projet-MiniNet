@@ -1,0 +1,97 @@
+import io.javalin.Javalin;
+import architecture.components.*;
+import architecture.connectors.SQLConnector;
+
+public class ServerMain {
+    public static void main(String[] args) {
+        System.out.println("--- DÉMARRAGE DU SERVEUR MININET ---");
+
+        // ==========================================
+        // 1. INSTANCIATION DES COMPOSANTS (BACKEND)
+        // ==========================================
+        // On utilise ton nouveau Storage SQLite !
+        Storage storage = new Storage();
+
+        // Les Managers (Logique métier)
+        UserManager userMgr = new UserManager();
+        PostManager postMgr = new PostManager();
+        MessageService msgSvc = new MessageService();
+
+        // Le Connecteur Interne (Glue entre Managers et Storage)
+        SQLConnector sqlConn = new SQLConnector();
+
+        // ==========================================
+        // 2. CÂBLAGE ARCHITECTURAL (BINDING)
+        // ==========================================
+        // On branche tout le monde sur la base de données via le connecteur
+        sqlConn.setComponent(storage);
+
+        userMgr.setDbConnector(sqlConn);
+        postMgr.setDbConnector(sqlConn);
+        msgSvc.setDbConnector(sqlConn);
+
+        // ==========================================
+        // 3. DÉMARRAGE DU SERVEUR JAVALIN
+        // ==========================================
+        // On démarre le serveur sur le port 7000
+        Javalin app = Javalin.create().start(7000);
+
+        System.out.println(">> Serveur prêt sur http://localhost:7000");
+
+        // ==========================================
+        // 4. DÉFINITION DES ROUTES (L'API)
+        // ==========================================
+        // C'est ici que tu définis comment ton binôme accède aux fonctions.
+
+        // --- AUTHENTIFICATION ---
+        // Route : GET /login?user=toto&pass=123
+        app.get("/login", ctx -> {
+            String u = ctx.queryParam("user");
+            String p = ctx.queryParam("pass");
+
+            System.out.println("API >> Tentative de login pour : " + u);
+
+            boolean success = userMgr.login(u, p);
+            // On répond "true" ou "false" en texte brut
+            ctx.result(String.valueOf(success));
+        });
+
+        // Route : POST /register (Paramètres envoyés dans le corps de requête)
+        app.post("/register", ctx -> {
+            String u = ctx.formParam("user");
+            String p = ctx.formParam("pass");
+
+            userMgr.register(u, p);
+            ctx.result("OK");
+        });
+
+        // --- POSTS (MUR) ---
+        // Route : POST /post (Créer un message)
+        app.post("/post", ctx -> {
+            String author = ctx.formParam("author");
+            String content = ctx.formParam("content");
+
+            postMgr.createPost(author, content);
+            ctx.result("Post créé");
+        });
+
+        // Route : GET /wall?user=toto (Lire le mur)
+        app.get("/wall", ctx -> {
+            String user = ctx.queryParam("user");
+
+            // On récupère la String formatée par ton PostManager
+            String mur = postMgr.getWall(user);
+            ctx.result(mur);
+        });
+
+        // --- MESSAGES PRIVÉS ---
+        // Route : GET /messages?user=toto
+        app.get("/messages", ctx -> {
+            String user = ctx.queryParam("user");
+            String inbox = msgSvc.checkMessages(user);
+            ctx.result(inbox);
+        });
+
+        // Tu peux ajouter d'autres routes ici pour les extensions...
+    }
+}
