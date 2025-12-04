@@ -152,57 +152,70 @@ System MiniNet = {
       Property services = { "sendMessage", "readMessages" };
   }
 
-  Component Storage = {
-      Port p_db_prov;   // Fournit accès données
-      Property engine = "In-Memory / SQL Simulation";
+  // --- COMPOSANTS DE STOCKAGE (Sharding) ---
+  Component StorageUsers = {
+      Port p_db_prov;
+      Property db_file = "users.db";
+  }
+   
+  Component StoragePosts = {
+      Port p_db_prov;
+      Property db_file = "posts.db";
+  }
+   
+  Component StorageMsgs = {
+      Port p_db_prov;
+      Property db_file = "messages.db";
   }
 
   // --- DÉCLARATION DES CONNECTEURS ---
 
-  // Connecteur générique RPC pour les interactions Client -> Managers
-  Connector RPC_Auth_Conn = {
-      Role caller;
-      Role called;
-      Property glue = "Synchronous Call-Return";
+  // Connecteur HTTP/REST Unique (Avec rôles distincts pour respecter le diagramme)
+  Connector HTTP_Connector = {
+      // Rôles coté Client
+      Role caller_auth; 
+      Role caller_post; 
+      Role caller_msg;
+      
+      // Rôles coté Serveur
+      Role called_auth; 
+      Role called_post; 
+      Role called_msg;
+      
+      Property glue = "REST / JSON over HTTP";
   }
 
-  Connector RPC_Post_Conn = {
-      Role caller;
-      Role called;
-      Property glue = "Synchronous Call-Return";
-  }
-
-  Connector RPC_Msg_Conn = {
-      Role caller;
-      Role called;
-      Property glue = "Synchronous Call-Return";
-  }
-
-  // Connecteur de données pour l'accès au stockage
-  Connector SQL_Link = {
-      Role requester;
-      Role responder;
-      Property glue = "JDBC / Query Transport";
+  // Connecteur SQL avec logique de Sharding
+  Connector SQL_Router_Conn = {
+      Role requester;       // Utilisé par les managers (N-to-1)
+      Role responder_u;     // Vers StorageUsers
+      Role responder_p;     // Vers StoragePosts
+      Role responder_m;     // Vers StorageMsgs
+      Property glue = "JDBC Routing (Switch on Table Name)";
   }
 
   // --- ATTACHMENTS (Câblage du système) ---
 
-  // 1. Connexions Client -> Managers
-  Attachment Client.p_auth_req to RPC_Auth_Conn.caller;
-  Attachment RPC_Auth_Conn.called to UserManager.p_auth_prov;
+  // 1. Connexions Client -> Managers (Via le Connecteur HTTP Unique)
+  Attachment Client.p_auth_req to HTTP_Connector.caller_auth;
+  Attachment HTTP_Connector.called_auth to UserManager.p_auth_prov;
 
-  Attachment Client.p_post_req to RPC_Post_Conn.caller;
-  Attachment RPC_Post_Conn.called to PostManager.p_post_prov;
+  Attachment Client.p_post_req to HTTP_Connector.caller_post;
+  Attachment HTTP_Connector.called_post to PostManager.p_post_prov;
 
-  Attachment Client.p_msg_req to RPC_Msg_Conn.caller;
-  Attachment RPC_Msg_Conn.called to MessageService.p_msg_prov;
+  Attachment Client.p_msg_req to HTTP_Connector.caller_msg;
+  Attachment HTTP_Connector.called_msg to MessageService.p_msg_prov;
 
-  // 2. Connexions Managers -> Storage (Multiplexage sur le connecteur SQL)
-  Attachment UserManager.p_db_user to SQL_Link.requester;
-  Attachment PostManager.p_db_post to SQL_Link.requester;
-  Attachment MessageService.p_db_msg to SQL_Link.requester;
-  
-  Attachment SQL_Link.responder to Storage.p_db_prov;
+  // 2. Connexions Managers -> SQL Router (Côté Requête)
+  // Note : Plusieurs composants peuvent se connecter au même rôle "requester"
+  Attachment UserManager.p_db_user to SQL_Router_Conn.requester;
+  Attachment PostManager.p_db_post to SQL_Router_Conn.requester;
+  Attachment MessageService.p_db_msg to SQL_Router_Conn.requester;
+   
+  // 3. Connexions SQL Router -> Storages (Côté Réponse / Distribution)
+  Attachment SQL_Router_Conn.responder_u to StorageUsers.p_db_prov;
+  Attachment SQL_Router_Conn.responder_p to StoragePosts.p_db_prov;
+  Attachment SQL_Router_Conn.responder_m to StorageMsgs.p_db_prov;
 }
 ```
 
