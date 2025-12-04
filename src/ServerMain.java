@@ -9,26 +9,30 @@ public class ServerMain {
         // ==========================================
         // 1. INSTANCIATION DES COMPOSANTS (BACKEND)
         // ==========================================
-        // On utilise ton nouveau Storage SQLite !
-        Storage storage = new Storage();
+
+        //INSTANCIATION DES 3 BASES DE DONNÉES (SHARDS)
+        // Chaque composant est indépendant et possède son propre fichier
+        Storage storageUsers = new Storage("users.db");
+        Storage storagePosts = new Storage("posts.db");
+        Storage storageMsgs  = new Storage("messages.db");
 
         // Les Managers (Logique métier)
         UserManager userMgr = new UserManager();
         PostManager postMgr = new PostManager();
         MessageService msgSvc = new MessageService();
 
-        // Le Connecteur Interne (Glue entre Managers et Storage)
-        SQLConnector sqlConn = new SQLConnector();
+        // Le Connecteur Intelligent
+        SQLConnector sqlRouter = new SQLConnector();
 
-        // ==========================================
         // 2. CÂBLAGE ARCHITECTURAL (BINDING)
-        // ==========================================
-        // On branche tout le monde sur la base de données via le connecteur
-        sqlConn.setComponent(storage);
 
-        userMgr.setDbConnector(sqlConn);
-        postMgr.setDbConnector(sqlConn);
-        msgSvc.setDbConnector(sqlConn);
+        // Configuration du connecteur : on lui donne les 3 destinations
+        sqlRouter.configureShards(storageUsers, storagePosts, storageMsgs);
+
+        // On branche les Managers sur ce connecteur unique
+        userMgr.setDbConnector(sqlRouter);
+        postMgr.setDbConnector(sqlRouter);
+        msgSvc.setDbConnector(sqlRouter);
 
         // ==========================================
         // 3. DÉMARRAGE DU SERVEUR JAVALIN

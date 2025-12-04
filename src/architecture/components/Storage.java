@@ -2,7 +2,6 @@ package architecture.components;
 
 import framework.Component;
 import architecture.interfaces.IStoragePort;
-
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -11,33 +10,32 @@ public class Storage extends Component implements IStoragePort {
 
     // Connexion unique à la base de données fichier
     private Connection connection;
-    private final String DB_URL = "jdbc:sqlite:mininet.db";
+    private String dbUrl;
 
-    public Storage() {
-        super("Database System (SQLite)");
+
+    public Storage(String dbName) {
+        super("Database System (" + dbName + ")");
+        // Chaque instance aura son propre fichier .db
+        this.dbUrl = "jdbc:sqlite:" + dbName;
         initDB();
     }
 
-    // --- INITIALISATION (Création des tables si elles n'existent pas) ---
     private void initDB() {
         try {
-            // 1. Chargement du driver (nécessaire pour certains vieux environnements Java)
             Class.forName("org.sqlite.JDBC");
+            // On utilise l'URL configurée
+            connection = DriverManager.getConnection(this.dbUrl);
+            printLog("Connecté au fichier : " + this.dbUrl);
 
-            // 2. Connexion (Crée le fichier mininet.db s'il n'existe pas)
-            connection = DriverManager.getConnection(DB_URL);
-            printLog("Connecté à la base de données SQLite : mininet.db");
-
-            // 3. Création des tables.
-            // Astuce : On utilise une structure générique (KEY, VALUE) pour coller à ton interface actuelle.
+            // On crée toutes les tables par sécurité,
+            // même si ce fichier ne servira que pour une seule table.
             createTable("USERS");
             createTable("POSTS");
             createTable("MESSAGES");
             createTable("FRIENDS");
 
         } catch (Exception e) {
-            System.err.println("ERREUR CRITIQUE STORAGE : " + e.getMessage());
-            e.printStackTrace();
+            System.err.println("ERREUR STORAGE : " + e.getMessage());
         }
     }
 
