@@ -116,6 +116,19 @@ Voici la suite de votre rapport, formatée en **Markdown (.md)**. Elle reprend e
 
 Cette section couvre la spécification formelle (ACME), la justification des choix (crucial pour la note) et les détails d'implémentation.
 
+### 2.4 Évolution vers une architecture Distribuée et Persistante
+
+L'architecture initiale a été enrichie pour répondre à des contraintes de scalabilité et de persistance :
+
+Serveur d'Application : Le backend expose désormais une API REST (via Javalin) permettant au Client de s'exécuter sur une machine distante.
+
+Persistance SQL : Les données ne sont plus volatiles mais stockées dans des bases de données SQLite.
+
+Data Sharding (Répartition) : Pour améliorer les performances, nous avons implémenté une stratégie de sharding au niveau du connecteur de données.
+
+Le système instancie 3 composants Storage distincts : un pour les utilisateurs, un pour les posts, un pour les messages.
+
+Le SQLConnector agit comme un routeur intelligent : il analyse la table demandée (USERS, POSTS, etc.) et dirige la requête vers la bonne instance de base de données. Cela permet de séparer physiquement les données sans changer le code des composants métier (Manager).
 -----
 
 
@@ -242,6 +255,12 @@ Bien que les managers soient séparés, nous avons opté pour un composant `Stor
 Pour les interactions entre le Client et les Managers, nous utilisons une Glue de type RPC Synchrone.
 
   * **Justification :** L'expérience utilisateur (UX) d'un réseau social nécessite souvent un retour immédiat (savoir si le login a réussi, si le message est envoyé). Un modèle asynchrone aurait complexifié inutilement le client (gestion de callbacks) pour ce type d'opérations simples.
+
+### 4.4 Connecteur Intelligent pour le Sharding
+
+Nous avons choisi d'implémenter la logique de répartition des données (Sharding) à l'intérieur du SQLConnector plutôt que dans les Managers.
+
+ * **Justification :** C'est un respect strict du principe de séparation des préoccupations. Les composants métier (UserManager, etc.) ne doivent pas savoir combien de bases de données existent ni où elles se trouvent. Ils envoient simplement une requête "Sauvegarde ceci". C'est la responsabilité du connecteur ("la glue") de savoir où et comment acheminer cette donnée. Cela permet d'ajouter de nouvelles bases de données (ex: une pour les Logs) en modifiant uniquement la configuration du connecteur, sans toucher au code métier.
 
 -----
 
