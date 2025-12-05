@@ -337,6 +337,15 @@ Problème initial : La première version du connecteur utilisait un routage stat
 Solution mise en œuvre : Nous sommes passés à un routage dynamique via une table de hachage (Map<String, IStoragePort>). Les routes ne sont plus codées en dur mais injectées par la configuration (ServerMain) au démarrage via la méthode registerRoute().
 
 Justification : Ce choix rend le connecteur totalement générique. Il agit comme un bus de données agnostique qui peut supporter une infinité de nouvelles tables ou de bases de données sans qu'aucune ligne de son code ne doive être réécrite. Cela garantit une modularité parfaite entre l'infrastructure de communication et les règles métier.
+
+### 4.7 Sécurisation des Données Sensibles (Hashing SHA-256)
+La gestion des identifiants est un point critique de tout système social. Stocker les mots de passe en clair dans la base de données (comme c'était le cas dans le prototype initial) représentait une vulnérabilité majeure : en cas de fuite de la base users.db, tous les comptes auraient été compromis.
+
+Amélioration technique : Nous avons intégré un mécanisme de hachage cryptographique utilisant l'algorithme SHA-256 (natif via java.security.MessageDigest).
+
+À l'inscription : Le mot de passe est immédiatement transformé en une empreinte hexadécimale avant d'être transmis au connecteur de stockage. Le composant Storage ne connaît jamais le mot de passe réel.
+
+À la connexion : Le mot de passe saisi est haché à la volée et comparé à l'empreinte stockée.
 -----
 
 ## 5\. Implémentation et Traçabilité (Prototype)
