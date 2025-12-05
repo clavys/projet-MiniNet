@@ -300,6 +300,23 @@ Nous avons choisi d'implémenter la logique de répartition des données (Shardi
 
  * **Justification :** C'est un respect strict du principe de séparation des préoccupations. Les composants métier (UserManager, etc.) ne doivent pas savoir combien de bases de données existent ni où elles se trouvent. Ils envoient simplement une requête "Sauvegarde ceci". C'est la responsabilité du connecteur ("la glue") de savoir où et comment acheminer cette donnée. Cela permet d'ajouter de nouvelles bases de données (ex: une pour les Logs) en modifiant uniquement la configuration du connecteur, sans toucher au code métier.
 
+### 4.4.1 Raffinement du Composant Storage : Configurabilité et Sharding
+Dans la première itération du prototype, le composant Storage était conçu de manière rigide : chaque instance initialisait systématiquement l'ensemble du schéma de base de données (tables USERS, POSTS, MESSAGES, FRIENDS).
+
+Cela posait un problème de cohérence avec notre stratégie de Sharding (répartition des données). Par exemple, le fichier posts.db contenait des tables vides USERS et MESSAGES, créant une "pollution" du schéma et une ambiguïté sur la localisation réelle des données.
+
+Nous avons donc refactorisé le composant Storage pour le rendre générique et configurable.
+
+Modification : Le constructeur du composant accepte désormais une liste variable d'arguments définissant les tables autorisées (String... tables).
+
+Principe Architectural : Cette approche respecte le principe d'Inversion de Contrôle. Ce n'est pas le composant qui décide de sa structure, mais la Configuration (le Main) qui lui injecte sa "responsabilité" au moment de l'instanciation.
+
+Gain obtenu :
+
+Isolation stricte : L'instance StoragePosts ne connaît physiquement que la table POSTS. Il est impossible d'y insérer accidentellement un utilisateur, ce qui renforce la robustesse du partitionnement.
+
+Réutilisabilité : La même classe Storage est utilisée pour trois contextes différents sans modification du code source, validant l'approche "Boîte Noire" des composants logiciels.
+
 ### 4.5 Extension : Service de Recommandation Hybride
 
 Pour la fonctionnalité avancée de suggestion d'amis, nous avons intégré un composant `RecommendationService`.
