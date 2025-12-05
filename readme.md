@@ -328,6 +328,15 @@ Pour la fonctionnalité avancée de suggestion d'amis, nous avons intégré un c
     2.  **Persistance SQL (Écriture Sécurisée)** : Lorsqu'un client ajoute ou supprime un ami, la modification est appliquée **immédiatement** au graphe en mémoire (pour la réactivité) ET envoyée au `StorageUsers` via le connecteur SQL (pour la durabilité).
 
     *Justification :* Ce découpage respecte le principe de responsabilité unique (SRP). Le `UserManager` gère les comptes (identité), tandis que le `RecommendationService` gère la topologie du réseau social.
+  
+### 4.6 Respect du Principe "Open/Closed" (Évolutivité du Connecteur)
+Dans une démarche d'amélioration de la qualité architecturale, nous avons retravaillé le SQLConnector pour qu'il respecte le principe Open/Closed (ouvert à l'extension, fermé à la modification).
+
+Problème initial : La première version du connecteur utilisait un routage statique (switch/case sur les noms de tables). L'ajout d'une nouvelle fonctionnalité (ex: gestion de Groupes) aurait obligé à modifier le code source du connecteur, créant un couplage fort et un risque de régression.
+
+Solution mise en œuvre : Nous sommes passés à un routage dynamique via une table de hachage (Map<String, IStoragePort>). Les routes ne sont plus codées en dur mais injectées par la configuration (ServerMain) au démarrage via la méthode registerRoute().
+
+Justification : Ce choix rend le connecteur totalement générique. Il agit comme un bus de données agnostique qui peut supporter une infinité de nouvelles tables ou de bases de données sans qu'aucune ligne de son code ne doive être réécrite. Cela garantit une modularité parfaite entre l'infrastructure de communication et les règles métier.
 -----
 
 ## 5\. Implémentation et Traçabilité (Prototype)
