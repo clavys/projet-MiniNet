@@ -4,6 +4,9 @@ import framework.Component;
 import architecture.interfaces.IUserPort;
 import architecture.connectors.SQLConnector;
 
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+
 public class UserManager extends Component implements IUserPort {
 
     private SQLConnector dbConnector;
@@ -12,24 +15,45 @@ public class UserManager extends Component implements IUserPort {
         super("UserManager");
     }
 
-    // Injection du connecteur (Binding)
     public void setDbConnector(SQLConnector conn) {
         this.dbConnector = conn;
     }
 
+    // --- NOUVELLE MÉTHODE PRIVÉE : HACHAGE SHA-256 ---
+    private String hash(String rawPassword) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] encodedhash = digest.digest(rawPassword.getBytes(StandardCharsets.UTF_8));
+
+            // Conversion des bytes en Hexadécimal (String lisible)
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : encodedhash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            // En cas d'erreur (peu probable), on log et on retourne null
+            System.err.println("Erreur de hachage : " + e.getMessage());
+            return null;
+        }
+    }
+
     @Override
     public void register(String username, String password) {
-        // Logique métier : on prépare la donnée
-        String userData = "PASS=" + password + ";ROLE=USER";
+        // SÉCURITÉ : On ne stocke plus "123" mais "a665a45920422f9d417e4867efdc4fb8..."
+        String hashedPassword = hash(password);
 
-        // Appel architectural : On délègue le stockage
-        printLog("Enregistrement de " + username + " vers le Storage...");
+        String userData = "PASS=" + hashedPassword + ";ROLE=USER";
+
+        printLog("Enregistrement sécurisé de " + username);
+        // Le stockage ne voit jamais le vrai mot de passe
         dbConnector.saveRecord("USERS", username, userData);
     }
 
     @Override
     public boolean login(String username, String password) {
-        // Appel architectural : On récupère la donnée brute
         String data = dbConnector.findRecord("USERS", username);
 
         if (data == null) {
@@ -37,8 +61,11 @@ public class UserManager extends Component implements IUserPort {
             return false;
         }
 
-        // Vérification simple (parsing du "faux" format DB)
-        if (data.contains("PASS=" + password)) {
+        // SÉCURITÉ : On hache le mot de passe reçu pour le comparer à celui stocké
+        String hashedInput = hash(password);
+
+        // On cherche "PASS=le_hash"
+        if (hashedInput != null && data.contains("PASS=" + hashedInput)) {
             printLog("Login OK pour " + username);
             return true;
         } else {
@@ -46,5 +73,4 @@ public class UserManager extends Component implements IUserPort {
             return false;
         }
     }
-
 }
