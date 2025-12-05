@@ -91,6 +91,13 @@ Les composants suivants ont été identifiés pour couvrir les exigences fonctio
 * **Services Fournis :** `save()`, `find()`.
 * **Ports :**
     * *Provided :* SQLInterface.
+ 
+#### **6. RecommendationService (Extension)**
+* **Description :** Composant hybride gérant le graphe d'amis en mémoire pour des calculs rapides.
+* **Services Fournis :** `getRecommendations()`, `getFriends()`.
+* **Ports :**
+    * *Provided :* RecoInterface (HTTP).
+    * *Required :* DatabaseAccess (pour la synchronisation au démarrage et à l'écriture).
 
 ### 2.2 Connecteurs et Interactions (Instances)
 
@@ -139,33 +146,46 @@ Cette section présente la description formelle de l'architecture du système Mi
 ```acme
 System MiniNet = {
 
-  // --- DÉCLARATION DES COMPOSANTS ---
+  // ==========================================
+  // 1. COMPOSANTS (Frontend & Backend)
+  // ==========================================
 
   Component Client = {
-      Port p_auth_req;  // Vers UserManager
-      Port p_post_req;  // Vers PostManager
-      Port p_msg_req;   // Vers MessageService
+      Port p_auth_req;
+      Port p_post_req;
+      Port p_msg_req;
+      Port p_reco_req;  // Port pour la Recommandation
   }
 
   Component UserManager = {
-      Port p_auth_prov; // Reçoit auth
-      Port p_db_user;   // Vers Storage
-      Property services = { "login", "register", "addFriend", "removeFriend" };
+      Port p_auth_prov;
+      Port p_db_user;
+      Property services = { "login", "register" };
   }
 
   Component PostManager = {
-      Port p_post_prov; // Reçoit commandes posts
-      Port p_db_post;   // Vers Storage
+      Port p_post_prov;
+      Port p_db_post;
       Property services = { "createPost", "getWall" };
   }
 
   Component MessageService = {
-      Port p_msg_prov;  // Reçoit commandes messages
-      Port p_db_msg;    // Vers Storage
+      Port p_msg_prov;
+      Port p_db_msg;
       Property services = { "sendMessage", "readMessages" };
   }
 
-  // --- COMPOSANTS DE STOCKAGE (Sharding) ---
+  // Nouveau Composant Hybride
+  Component RecommendationService = {
+      Port p_reco_prov; // Reçoit les appels HTTP
+      Port p_db_req;    // Accès DB pour persistance (Write-through)
+      Property services = { "addFriend", "removeFriend", "getFriends", "getRecommendations" };
+  }
+
+  // ==========================================
+  // 2. COMPOSANTS DE DONNÉES (Sharding)
+  // ==========================================
+
   Component StorageUsers = {
       Port p_db_prov;
       Property db_file = "users.db";
@@ -181,51 +201,69 @@ System MiniNet = {
       Property db_file = "messages.db";
   }
 
-  // --- DÉCLARATION DES CONNECTEURS ---
+  // ==========================================
+  // 3. CONNECTEURS
+  // ==========================================
 
-  // Connecteur HTTP/REST Unique (Avec rôles distincts pour respecter le diagramme)
+  // Connecteur HTTP Unique (Hub de communication)
   Connector HTTP_Connector = {
       // Rôles coté Client
       Role caller_auth; 
       Role caller_post; 
       Role caller_msg;
+      Role caller_reco; // Rôle pour Reco
       
       // Rôles coté Serveur
       Role called_auth; 
       Role called_post; 
       Role called_msg;
+      Role called_reco; // Rôle pour Reco
       
       Property glue = "REST / JSON over HTTP";
   }
 
-  // Connecteur SQL avec logique de Sharding
+  // Connecteur SQL Intelligent (Routeur)
   Connector SQL_Router_Conn = {
-      Role requester;       // Utilisé par les managers (N-to-1)
+      Role requester;       // Rôle partagé par tous les managers (N-to-1)
+      
       Role responder_u;     // Vers StorageUsers
       Role responder_p;     // Vers StoragePosts
       Role responder_m;     // Vers StorageMsgs
+      
       Property glue = "JDBC Routing (Switch on Table Name)";
   }
 
-  // --- ATTACHMENTS (Câblage du système) ---
+  // ==========================================
+  // 4. ATTACHMENTS (Câblage Final)
+  // ==========================================
 
-  // 1. Connexions Client -> Managers (Via le Connecteur HTTP Unique)
+  // --- A. Connexions Client -> Managers (Via HTTP) ---
+  
+  // Authentification
   Attachment Client.p_auth_req to HTTP_Connector.caller_auth;
   Attachment HTTP_Connector.called_auth to UserManager.p_auth_prov;
 
+  // Posts
   Attachment Client.p_post_req to HTTP_Connector.caller_post;
   Attachment HTTP_Connector.called_post to PostManager.p_post_prov;
 
+  // Messages
   Attachment Client.p_msg_req to HTTP_Connector.caller_msg;
   Attachment HTTP_Connector.called_msg to MessageService.p_msg_prov;
 
-  // 2. Connexions Managers -> SQL Router (Côté Requête)
-  // Note : Plusieurs composants peuvent se connecter au même rôle "requester"
+  // Recommandation / Amis
+  Attachment Client.p_reco_req to HTTP_Connector.caller_reco;
+  Attachment HTTP_Connector.called_reco to RecommendationService.p_reco_prov;
+
+  // --- B. Connexions Managers -> SQL Router (Côté Requête) ---
+  
   Attachment UserManager.p_db_user to SQL_Router_Conn.requester;
   Attachment PostManager.p_db_post to SQL_Router_Conn.requester;
   Attachment MessageService.p_db_msg to SQL_Router_Conn.requester;
+  Attachment RecommendationService.p_db_req to SQL_Router_Conn.requester;
    
-  // 3. Connexions SQL Router -> Storages (Côté Réponse / Distribution)
+  // --- C. Connexions SQL Router -> Storages (Côté Réponse / Distribution) ---
+  
   Attachment SQL_Router_Conn.responder_u to StorageUsers.p_db_prov;
   Attachment SQL_Router_Conn.responder_p to StoragePosts.p_db_prov;
   Attachment SQL_Router_Conn.responder_m to StorageMsgs.p_db_prov;
@@ -262,6 +300,17 @@ Nous avons choisi d'implémenter la logique de répartition des données (Shardi
 
  * **Justification :** C'est un respect strict du principe de séparation des préoccupations. Les composants métier (UserManager, etc.) ne doivent pas savoir combien de bases de données existent ni où elles se trouvent. Ils envoient simplement une requête "Sauvegarde ceci". C'est la responsabilité du connecteur ("la glue") de savoir où et comment acheminer cette donnée. Cela permet d'ajouter de nouvelles bases de données (ex: une pour les Logs) en modifiant uniquement la configuration du connecteur, sans toucher au code métier.
 
+### 4.5 Extension : Service de Recommandation Hybride
+
+Pour la fonctionnalité avancée de suggestion d'amis, nous avons intégré un composant `RecommendationService`.
+
+* **Choix Architectural : Persistance Synchronisée (Write-Through)**
+    Pour concilier performance algorithmique et persistance des données, nous avons opté pour une architecture hybride :
+
+    1.  **Graphe en Mémoire (Lecture Rapide)** : Au démarrage, le composant charge toutes les relations depuis `StorageUsers` (via le connecteur SQL) et construit un graphe d'objets en mémoire. Cela permet d'effectuer des algorithmes de traversée de graphe (recommandations, calcul de distance) avec une complexité temporelle très faible, impossible à obtenir avec de simples requêtes SQL.
+    2.  **Persistance SQL (Écriture Sécurisée)** : Lorsqu'un client ajoute ou supprime un ami, la modification est appliquée **immédiatement** au graphe en mémoire (pour la réactivité) ET envoyée au `StorageUsers` via le connecteur SQL (pour la durabilité).
+
+    *Justification :* Ce découpage respecte le principe de responsabilité unique (SRP). Le `UserManager` gère les comptes (identité), tandis que le `RecommendationService` gère la topologie du réseau social.
 -----
 
 ## 5\. Implémentation et Traçabilité (Prototype)
