@@ -197,4 +197,24 @@ public class RPCConnector extends Connector {
             System.err.println("Erreur HTTP RemoveFriend : " + e.getMessage());
         }
     }
+
+    // Récupérer la liste des amis
+    public String callGetFriends(String user) {
+        try {
+            String url = SERVER_URL + "/friends?user=" + encode(user);
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body(); // Retourne "Titi,Toto,..."
+        } catch (Exception e) { return "Erreur réseau"; }
+    }
+
+    // Récupérer les recommandations
+    public String callGetRecommendations(String user) {
+        try {
+            String url = SERVER_URL + "/recommendations?user=" + encode(user);
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
+        } catch (Exception e) { return "Erreur réseau"; }
+    }
 }

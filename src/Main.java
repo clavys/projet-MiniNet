@@ -3,6 +3,7 @@ import architecture.connectors.RPCConnector;
 
 public class Main {
     public static void main(String[] args) {
+
         System.out.println("--- Démarrage du Client Console (Distribué) ---");
 
         // 1. On ne crée PLUS le backend (Storage, UserManager...) ici !
