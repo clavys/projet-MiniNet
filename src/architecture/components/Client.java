@@ -6,173 +6,184 @@ import java.util.Scanner;
 
 public class Client extends Component {
 
-    // --- COULEURS ANSI (Pour embellir la console) ---
+    // Codes couleurs pour la lisibilité
     public static final String ANSI_RESET = "\u001B[0m";
     public static final String ANSI_RED = "\u001B[31m";
     public static final String ANSI_GREEN = "\u001B[32m";
+    public static final String ANSI_YELLOW = "\u001B[33m";
     public static final String ANSI_BLUE = "\u001B[34m";
+    public static final String ANSI_CYAN = "\u001B[36m";
 
-    // --- PORTS REQUIS (Via Connecteurs) ---
     private RPCConnector authConnector;
     private RPCConnector msgConnector;
     private RPCConnector postConnector;
 
-    // Pour simuler une session (qui est connecté ?)
     private String currentUser = null;
 
     public Client() {
         super("Client Console");
     }
 
-    // --- BINDING (Setters pour l'injection des connecteurs) ---
     public void setAuthConnector(RPCConnector c) { this.authConnector = c; }
     public void setMsgConnector(RPCConnector c) { this.msgConnector = c; }
     public void setPostConnector(RPCConnector c) { this.postConnector = c; }
 
-    // --- BOUCLE PRINCIPALE (UI) ---
     public void start() {
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
 
-        System.out.println("=================================");
-        System.out.println("   BIENVENUE SUR MININET V1.0    ");
-        System.out.println("=================================");
+        System.out.println(ANSI_CYAN + "=================================");
+        System.out.println("   DEBUGGER CLI - MININET V1.1    ");
+        System.out.println("=================================" + ANSI_RESET);
 
         while (running) {
-            System.out.println("\n--- MENU ---");
-            if (currentUser == null) {
-                // Mode déconnecté
-                System.out.println("1. S'inscrire (Register)");
-                System.out.println("2. Se connecter (Login)");
-                System.out.println("0. Quitter");
-            } else {
-                // Mode connecté : Pseudo en ROUGE comme demandé
-                System.out.println("Connecté en tant que : [" + ANSI_RED + currentUser + ANSI_RESET + "]");
-                System.out.println("---------------------------------");
-                System.out.println("3. Envoyer un message privé");
-                System.out.println("4. Lire mes messages");
-                System.out.println("5. Publier sur le mur (Post)");
-                System.out.println("6. Voir le mur (Fil d'actualité)");
-
-                // --- OPTIONS AJOUTÉES ---
-                System.out.println("7. Ajouter un ami");
-                System.out.println("8. Supprimer un ami");
-                // ------------------------
-
-                System.out.println("9. Se déconnecter");
-                System.out.println("0. Quitter");
-            }
-            System.out.print("Votre choix > ");
+            printMenu();
+            System.out.print(ANSI_YELLOW + "Votre choix > " + ANSI_RESET);
             String choice = scanner.nextLine();
 
             switch (choice) {
-                // Cas accessibles hors connexion
+                // --- Hors Connexion ---
                 case "1": handleRegister(scanner); break;
                 case "2": handleLogin(scanner); break;
-                case "0":
-                    System.out.println("Au revoir !");
-                    running = false;
-                    break;
 
-                // Cas nécessitant une connexion
+                // --- Actions Sociales ---
                 case "3": if(checkAuth()) handleSendMessage(scanner); break;
                 case "4": if(checkAuth()) handleReadMessages(); break;
                 case "5": if(checkAuth()) handleCreatePost(scanner); break;
                 case "6": if(checkAuth()) handleGetWall(); break;
 
-                // --- CASES AJOUTÉS ---
+                // --- Gestion Amis (Ajouts) ---
                 case "7": if(checkAuth()) handleAddFriend(scanner); break;
                 case "8": if(checkAuth()) handleRemoveFriend(scanner); break;
+                case "9": if(checkAuth()) handleListFriends(); break;       // NOUVEAU
+                case "10": if(checkAuth()) handleGetRecommendations(); break; // NOUVEAU
 
-                case "9":
+                // --- Système ---
+                case "0":
                     this.currentUser = null;
-                    System.out.println(ANSI_BLUE + ">> Déconnexion réussie." + ANSI_RESET);
+                    System.out.println(ANSI_BLUE + ">> Déconnexion..." + ANSI_RESET);
+                    break;
+                case "Q": // Pour quitter complètement
+                case "q":
+                    System.out.println("Arrêt du client.");
+                    running = false;
                     break;
 
                 default:
-                    System.out.println("Choix invalide.");
+                    System.out.println(ANSI_RED + "Choix invalide." + ANSI_RESET);
             }
         }
         scanner.close();
     }
 
-    // --- HANDLERS (Gestion des actions) ---
+    private void printMenu() {
+        System.out.println("\n--- MENU ---");
+        if (currentUser == null) {
+            System.out.println("1. S'inscrire");
+            System.out.println("2. Se connecter");
+            System.out.println("Q. Quitter l'application");
+        } else {
+            System.out.println("Utilisateur : [" + ANSI_GREEN + currentUser + ANSI_RESET + "]");
+            System.out.println("--- Messagerie & Mur ---");
+            System.out.println("3. Envoyer MP");
+            System.out.println("4. Lire mes MP");
+            System.out.println("5. Poster sur le mur");
+            System.out.println("6. Voir le fil d'actu");
+            System.out.println("--- Graphe Social ---");
+            System.out.println("7. Ajouter un ami");
+            System.out.println("8. Supprimer un ami");
+            System.out.println("9. " + ANSI_CYAN + "Voir ma liste d'amis" + ANSI_RESET);
+            System.out.println("10. " + ANSI_CYAN + "Voir les recommandations (Amis d'amis)" + ANSI_RESET);
+            System.out.println("---------------------");
+            System.out.println("0. Se déconnecter");
+        }
+    }
+
+    // --- HANDLERS EXISTANTS (Légèrement nettoyés) ---
 
     private void handleRegister(Scanner scanner) {
-        System.out.print("Pseudo : ");
-        String user = scanner.nextLine();
-        System.out.print("Mot de passe : ");
-        String pass = scanner.nextLine();
+        System.out.print("Nouveau Pseudo : "); String user = scanner.nextLine();
+        System.out.print("Mot de passe : "); String pass = scanner.nextLine();
         authConnector.callRegister(user, pass);
-        System.out.println(ANSI_GREEN + ">> Demande d'inscription envoyée." + ANSI_RESET);
     }
 
     private void handleLogin(Scanner scanner) {
-        System.out.print("Pseudo : ");
-        String user = scanner.nextLine();
-        System.out.print("Mot de passe : ");
-        String pass = scanner.nextLine();
-
-        boolean success = authConnector.callLogin(user, pass);
-        if (success) {
+        System.out.print("Pseudo : "); String user = scanner.nextLine();
+        System.out.print("Mot de passe : "); String pass = scanner.nextLine();
+        if (authConnector.callLogin(user, pass)) {
             this.currentUser = user;
-            System.out.println(ANSI_GREEN + ">> SUCCÈS : Bienvenue " + user + " !" + ANSI_RESET);
+            System.out.println(ANSI_GREEN + ">> Connecté !" + ANSI_RESET);
         } else {
-            System.out.println(ANSI_RED + ">> ÉCHEC : Identifiants incorrects." + ANSI_RESET);
+            System.out.println(ANSI_RED + ">> Erreur login." + ANSI_RESET);
         }
     }
 
     private void handleSendMessage(Scanner scanner) {
-        System.out.print("Destinataire : ");
-        String to = scanner.nextLine();
-        System.out.print("Message : ");
-        String content = scanner.nextLine();
-
+        System.out.print("Destinataire : "); String to = scanner.nextLine();
+        System.out.print("Message : "); String content = scanner.nextLine();
         msgConnector.callSendMessage(currentUser, to, content);
-        System.out.println(ANSI_GREEN + ">> Message envoyé !" + ANSI_RESET);
     }
 
     private void handleReadMessages() {
-        String inbox = msgConnector.callCheckMessages(currentUser);
-        System.out.println("\n--- Vos Messages ---");
-        System.out.println(inbox);
+        System.out.println(ANSI_BLUE + msgConnector.callCheckMessages(currentUser) + ANSI_RESET);
     }
 
     private void handleCreatePost(Scanner scanner) {
-        System.out.print("Contenu du post : ");
-        String content = scanner.nextLine();
-
+        System.out.print("Contenu : "); String content = scanner.nextLine();
         postConnector.callCreatePost(currentUser, content);
-        System.out.println(ANSI_GREEN + ">> Post publié sur votre mur !" + ANSI_RESET);
     }
 
     private void handleGetWall() {
-        String wall = postConnector.callGetWall(currentUser);
-        System.out.println(wall);
+        System.out.println(postConnector.callGetWall(currentUser));
     }
 
-    // --- MÉTHODES POUR LES AMIS ---
-
     private void handleAddFriend(Scanner scanner) {
-        System.out.print("Nom de l'ami à ajouter : ");
-        String friend = scanner.nextLine();
-
+        System.out.print("Ami à ajouter : "); String friend = scanner.nextLine();
         authConnector.callAddFriend(currentUser, friend);
-        System.out.println(ANSI_GREEN + ">> Ami ajouté (simulé) !" + ANSI_RESET);
+        System.out.println("Requête envoyée.");
     }
 
     private void handleRemoveFriend(Scanner scanner) {
-        System.out.print("Nom de l'ami à supprimer : ");
-        String friend = scanner.nextLine();
-
+        System.out.print("Ami à supprimer : "); String friend = scanner.nextLine();
         authConnector.callRemoveFriend(currentUser, friend);
-        System.out.println(ANSI_GREEN + ">> Ami supprimé !" + ANSI_RESET);
+        System.out.println("Requête envoyée.");
     }
 
-    // --- UTILITAIRE DE SÉCURITÉ ---
+    // --- NOUVEAUX HANDLERS ---
+
+    private void handleListFriends() {
+        System.out.println("Récupération de la liste d'amis...");
+        String response = authConnector.callGetFriends(currentUser);
+        // Le serveur renvoie "Titi,Toto,Tata" ou une chaîne vide
+        if (response == null || response.trim().isEmpty()) {
+            System.out.println(ANSI_YELLOW + "Vous n'avez pas encore d'amis." + ANSI_RESET);
+        } else {
+            String[] friends = response.split(",");
+            System.out.println(ANSI_GREEN + "Vos amis (" + friends.length + ") :" + ANSI_RESET);
+            for (String f : friends) {
+                System.out.println(" - " + f);
+            }
+        }
+    }
+
+    private void handleGetRecommendations() {
+        System.out.println("Calcul des recommandations...");
+        String response = authConnector.callGetRecommendations(currentUser);
+
+        if (response == null || response.trim().isEmpty() || response.contains("Aucune")) {
+            System.out.println(ANSI_YELLOW + "Aucune recommandation pour le moment." + ANSI_RESET);
+        } else {
+            String[] recos = response.split(",");
+            System.out.println(ANSI_CYAN + "Vous connaissez peut-être :" + ANSI_RESET);
+            for (String r : recos) {
+                System.out.println(" ? " + r);
+            }
+        }
+    }
+
     private boolean checkAuth() {
         if (currentUser == null) {
-            System.out.println(ANSI_RED + ">> ERREUR : Vous devez être connecté !" + ANSI_RESET);
+            System.out.println(ANSI_RED + ">> ERREUR : Connectez-vous d'abord !" + ANSI_RESET);
             return false;
         }
         return true;
