@@ -12,11 +12,16 @@ public class ServerMain {
         // 1. INSTANCIATION DES COMPOSANTS (BACKEND)
         // ==========================================
 
-        //INSTANCIATION DES 3 BASES DE DONNÉES (SHARDS)
-        // Chaque composant est indépendant et possède son propre fichier
-        Storage storageUsers = new Storage("users.db");
-        Storage storagePosts = new Storage("posts.db");
-        Storage storageMsgs  = new Storage("messages.db");
+        // INSTANCIATION DES 3 BASES DE DONNÉES (SHARDS) AVEC TABLES SPÉCIFIQUES
+
+        // 1. Base Utilisateurs : contient les users ET les liens d'amitié
+        Storage storageUsers = new Storage("users.db", "USERS", "FRIENDS");
+
+        // 2. Base Posts : ne contient que les posts
+        Storage storagePosts = new Storage("posts.db", "POSTS");
+
+        // 3. Base Messages : ne contient que les messages privés
+        Storage storageMsgs  = new Storage("messages.db", "MESSAGES");
 
         // Les Managers (Logique métier)
         UserManager userMgr = new UserManager();
@@ -27,10 +32,17 @@ public class ServerMain {
         // Le Connecteur Intelligent
         SQLConnector sqlRouter = new SQLConnector();
 
-        // 2. CÂBLAGE ARCHITECTURAL (BINDING)
+        // 2. CÂBLAGE ARCHITECTURAL (BINDING) dynamique
 
-        // Configuration du connecteur : on lui donne les 3 destinations
-        sqlRouter.configureShards(storageUsers, storagePosts, storageMsgs);
+        // Tout ce qui concerne USERS et FRIENDS va dans storageUsers
+        sqlRouter.registerRoute("USERS", storageUsers);
+        sqlRouter.registerRoute("FRIENDS", storageUsers);
+
+        // Tout ce qui concerne POSTS va dans storagePosts
+        sqlRouter.registerRoute("POSTS", storagePosts);
+
+        // Tout ce qui concerne MESSAGES va dans storageMsgs
+        sqlRouter.registerRoute("MESSAGES", storageMsgs);
 
         // On branche les Managers sur ce connecteur unique
         userMgr.setDbConnector(sqlRouter);
