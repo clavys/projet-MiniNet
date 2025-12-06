@@ -1,10 +1,17 @@
 import io.javalin.Javalin;
 import architecture.components.*;
 import architecture.connectors.SQLConnector;
+import io.javalin.websocket.WsContext;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.List;
 
 public class ServerMain {
+
+    // Map<Username, ContextWebSocket>
+    static Map<String, WsContext> userSessions = new ConcurrentHashMap<>();
+
     public static void main(String[] args) {
         System.out.println("--- DÉMARRAGE DU SERVEUR MININET ---");
 
@@ -115,13 +122,26 @@ public class ServerMain {
             ctx.result(inbox);
         });
 
-        // Route : POST /messages?user=toto
+        // Route : POST /message?user=toto
         app.post("/message", ctx -> {
             String from = ctx.formParam("from");
             String to = ctx.formParam("to");
             String content = ctx.formParam("content");
+
+            // 1. Persistance (Votre code existant qui appelle le MessageService)
             msgSvc.sendMessage(from, to, content);
-            ctx.result("Message envoyé");
+
+            // 2. Notification Temps Réel (Le "Bus d'événements")
+            // On regarde si le destinataire est connecté en WebSocket
+            WsContext recipientCtx = userSessions.get(to);
+
+            if (recipientCtx != null && recipientCtx.session.isOpen()) {
+                // On lui pousse une notification JSON ou Texte
+                recipientCtx.send("NOTIFICATION:Nouveau message de " + from);
+                System.out.println(">> [WS] Notification envoyée à " + to);
+            }
+
+            ctx.result("Message enregistré et notifié si possible.");
         });
 
         // Ajouter un ami
@@ -154,6 +174,41 @@ public class ServerMain {
             if (recos.isEmpty()) ctx.result("Aucune recommandation.");
             else ctx.result(String.join(",", recos));
         });
+
+        // ==========================================
+        // 5. CONFIGURATION DU BUS D'ÉVÉNEMENTS (WebSocket)
+        // ==========================================
+
+        // Le client se connectera sur ws://localhost:7000/events?user=Toto
+        app.ws("/events", ws -> {
+
+            ws.onConnect(ctx -> {
+                String user = ctx.queryParam("user");
+                if (user != null) {
+                    // --- AJOUT IMPORTANT : Timeout de 30 minutes ---
+                    ctx.session.setIdleTimeout(java.time.Duration.ofMinutes(30));
+                    // -----------------------------------------------
+
+                    userSessions.put(user, ctx);
+                    System.out.println(">> [WS] Connexion active pour : " + user);
+                }
+            });
+
+            // Quand un client se déconnecte (ferme l'appli)
+            ws.onClose(ctx -> {
+                String user = ctx.queryParam("user");
+                if (user != null) {
+                    userSessions.remove(user);
+                    System.out.println(">> [WS] Déconnexion de : " + user);
+                }
+            });
+
+            // (Optionnel) Si le client envoie un message via WS
+            ws.onMessage(ctx -> {
+                // Pour l'instant on ignore, on utilise WS juste pour le Push vers le client
+            });
+        });
+
     }
 
 }

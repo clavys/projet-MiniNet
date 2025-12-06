@@ -2,7 +2,12 @@ package architecture.components;
 
 import framework.Component;
 import architecture.connectors.RPCConnector;
+
+import java.net.URI;
+import java.net.http.HttpClient;
 import java.util.Scanner;
+import java.net.http.WebSocket;
+import java.util.concurrent.CompletionStage;
 
 public class Client extends Component {
 
@@ -28,6 +33,12 @@ public class Client extends Component {
     public void setMsgConnector(RPCConnector c) { this.msgConnector = c; }
     public void setPostConnector(RPCConnector c) { this.postConnector = c; }
 
+    // On garde une référence pour empêcher la déconnexion
+    private WebSocket eventBusSocket;
+
+    //flag
+    private boolean isViewingMessages = false;
+
     public void start() {
         Scanner scanner = new Scanner(System.in);
         boolean running = true;
@@ -48,7 +59,7 @@ public class Client extends Component {
 
                 // --- Actions Sociales ---
                 case "3": if(checkAuth()) handleSendMessage(scanner); break;
-                case "4": if(checkAuth()) handleReadMessages(); break;
+                case "4": if(checkAuth()) handleReadMessages(scanner); break;
                 case "5": if(checkAuth()) handleCreatePost(scanner); break;
                 case "6": if(checkAuth()) handleGetWall(); break;
 
@@ -110,9 +121,15 @@ public class Client extends Component {
     private void handleLogin(Scanner scanner) {
         System.out.print("Pseudo : "); String user = scanner.nextLine();
         System.out.print("Mot de passe : "); String pass = scanner.nextLine();
+
         if (authConnector.callLogin(user, pass)) {
             this.currentUser = user;
             System.out.println(ANSI_GREEN + ">> Connecté !" + ANSI_RESET);
+
+            // --- AJOUT : On branche le câble WebSocket ---
+            connectToEventBus(user);
+            // ---------------------------------------------
+
         } else {
             System.out.println(ANSI_RED + ">> Erreur login." + ANSI_RESET);
         }
@@ -124,8 +141,21 @@ public class Client extends Component {
         msgConnector.callSendMessage(currentUser, to, content);
     }
 
-    private void handleReadMessages() {
+    private void handleReadMessages(Scanner scanner) {
+        // 1. On ACTIVE le mode Live
+        this.isViewingMessages = true;
+
+        System.out.println("--- MES MESSAGES (Mode Live) ---");
+        // Affichage initial
         System.out.println(ANSI_BLUE + msgConnector.callCheckMessages(currentUser) + ANSI_RESET);
+        System.out.println("\n[En attente de nouveaux messages... Appuyez sur Entrée pour sortir]");
+
+        // 2. On BLOQUE le programme ici tant que l'utilisateur n'appuie pas sur Entrée
+        scanner.nextLine();
+
+        // 3. On DÉSACTIVE le mode Live en sortant
+        this.isViewingMessages = false;
+        System.out.println("Sortie du mode lecture.");
     }
 
     private void handleCreatePost(Scanner scanner) {
@@ -187,5 +217,45 @@ public class Client extends Component {
             return false;
         }
         return true;
+    }
+
+    private void connectToEventBus(String username) {
+        try {
+            String wsUrl = "ws://localhost:7000/events?user=" + username;
+
+            this.eventBusSocket = HttpClient.newHttpClient()
+                    .newWebSocketBuilder()
+                    .buildAsync(URI.create(wsUrl), new WebSocket.Listener() {
+
+                        @Override
+                        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+
+                            // CORRECTION ICI : On utilise Client.this pour accéder au flag
+                            if (Client.this.isViewingMessages) {
+
+                                // On récupère les messages à jour (Client.this est optionnel ici mais plus clair)
+                                String freshMessages = Client.this.msgConnector.callCheckMessages(currentUser);
+
+                                System.out.println("\n\n\n========================================");
+                                System.out.println("   NOUVEAU MESSAGE REÇU (ACTUALISÉ)   ");
+                                System.out.println("========================================");
+                                System.out.println(ANSI_BLUE + freshMessages + ANSI_RESET);
+                                System.out.println("\n[Mode Live] Appuyez sur Entrée pour quitter...");
+
+                            } else {
+                                System.out.println("\n" + ANSI_RED + ">>> NOTIF : " + data + ANSI_RESET);
+                                System.out.print(ANSI_YELLOW + "Votre choix > " + ANSI_RESET);
+                            }
+
+                            return WebSocket.Listener.super.onText(webSocket, data, last);
+                        }
+                    })
+                    .join();
+
+            System.out.println(ANSI_CYAN + "[Sys] Connecté au Bus d'événements." + ANSI_RESET);
+
+        } catch (Exception e) {
+            System.err.println("Erreur connexion WebSocket : " + e.getMessage());
+        }
     }
 }
