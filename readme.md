@@ -151,10 +151,14 @@ System MiniNet = {
   // ==========================================
 
   Component Client = {
+      // Ports RPC (Synchrones)
       Port p_auth_req;
       Port p_post_req;
       Port p_msg_req;
-      Port p_reco_req;  // Port pour la Recommandation
+      Port p_reco_req;
+      
+      // NOUVEAU : Port pour écouter les événements (Asynchrone)
+      Port p_event_sub;
   }
 
   Component UserManager = {
@@ -172,14 +176,17 @@ System MiniNet = {
   Component MessageService = {
       Port p_msg_prov;
       Port p_db_msg;
+      
+      // NOUVEAU : Port pour publier les notifications
+      Port p_notif_pub;
+      
       Property services = { "sendMessage", "readMessages" };
   }
 
-  // Nouveau Composant Hybride
   Component RecommendationService = {
-      Port p_reco_prov; // Reçoit les appels HTTP
-      Port p_db_req;    // Accès DB pour persistance (Write-through)
-      Property services = { "addFriend", "removeFriend", "getFriends", "getRecommendations" };
+      Port p_reco_prov;
+      Port p_db_req;
+      Property services = { "addFriend", "getRecommendations" };
   }
 
   // ==========================================
@@ -205,68 +212,72 @@ System MiniNet = {
   // 3. CONNECTEURS
   // ==========================================
 
-  // Connecteur HTTP Unique (Hub de communication)
+  // --- A. Connecteur RPC (Commandes) ---
   Connector HTTP_Connector = {
-      // Rôles coté Client
       Role caller_auth; 
       Role caller_post; 
       Role caller_msg;
-      Role caller_reco; // Rôle pour Reco
+      Role caller_reco;
       
-      // Rôles coté Serveur
       Role called_auth; 
       Role called_post; 
       Role called_msg;
-      Role called_reco; // Rôle pour Reco
+      Role called_reco;
       
-      Property glue = "REST / JSON over HTTP";
+      Property glue = "REST / JSON over HTTP (Synchrone)";
   }
 
-  // Connecteur SQL Intelligent (Routeur)
+  // --- B. Connecteur SQL (Persistance) ---
   Connector SQL_Router_Conn = {
-      Role requester;       // Rôle partagé par tous les managers (N-to-1)
-      
-      Role responder_u;     // Vers StorageUsers
-      Role responder_p;     // Vers StoragePosts
-      Role responder_m;     // Vers StorageMsgs
-      
+      Role requester;
+      Role responder_u;
+      Role responder_p;
+      Role responder_m;
       Property glue = "JDBC Routing (Switch on Table Name)";
   }
 
+  // --- C. NOUVEAU : Connecteur Événementiel ---
+  Connector WS_EventBus = {
+      Role publisher;   // Pour celui qui émet (Serveur)
+      Role subscriber;  // Pour celui qui écoute (Client)
+      
+      Property glue = "WebSocket / Pub-Sub (Asynchrone)";
+  }
+
   // ==========================================
-  // 4. ATTACHMENTS (Câblage Final)
+  // 4. ATTACHMENTS (Câblage)
   // ==========================================
 
-  // --- A. Connexions Client -> Managers (Via HTTP) ---
-  
-  // Authentification
+  // --- Câblage RPC (Client -> Managers) ---
   Attachment Client.p_auth_req to HTTP_Connector.caller_auth;
   Attachment HTTP_Connector.called_auth to UserManager.p_auth_prov;
 
-  // Posts
   Attachment Client.p_post_req to HTTP_Connector.caller_post;
   Attachment HTTP_Connector.called_post to PostManager.p_post_prov;
 
-  // Messages
   Attachment Client.p_msg_req to HTTP_Connector.caller_msg;
   Attachment HTTP_Connector.called_msg to MessageService.p_msg_prov;
 
-  // Recommandation / Amis
   Attachment Client.p_reco_req to HTTP_Connector.caller_reco;
   Attachment HTTP_Connector.called_reco to RecommendationService.p_reco_prov;
 
-  // --- B. Connexions Managers -> SQL Router (Côté Requête) ---
-  
+  // --- Câblage SQL (Managers -> Storage) ---
   Attachment UserManager.p_db_user to SQL_Router_Conn.requester;
   Attachment PostManager.p_db_post to SQL_Router_Conn.requester;
   Attachment MessageService.p_db_msg to SQL_Router_Conn.requester;
   Attachment RecommendationService.p_db_req to SQL_Router_Conn.requester;
    
-  // --- C. Connexions SQL Router -> Storages (Côté Réponse / Distribution) ---
-  
   Attachment SQL_Router_Conn.responder_u to StorageUsers.p_db_prov;
   Attachment SQL_Router_Conn.responder_p to StoragePosts.p_db_prov;
   Attachment SQL_Router_Conn.responder_m to StorageMsgs.p_db_prov;
+
+  // --- NOUVEAU : Câblage WebSocket (Notifications) ---
+  
+  // 1. Le MessageService publie sur le Bus
+  Attachment MessageService.p_notif_pub to WS_EventBus.publisher;
+
+  // 2. Le Client souscrit au Bus
+  Attachment Client.p_event_sub to WS_EventBus.subscriber;
 }
 ```
 
@@ -346,6 +357,22 @@ Amélioration technique : Nous avons intégré un mécanisme de hachage cryptogr
 À l'inscription : Le mot de passe est immédiatement transformé en une empreinte hexadécimale avant d'être transmis au connecteur de stockage. Le composant Storage ne connaît jamais le mot de passe réel.
 
 À la connexion : Le mot de passe saisi est haché à la volée et comparé à l'empreinte stockée.
+
+### 4.8 Transition vers une Architecture Hybride (RPC + Événementielle)
+
+Pour la gestion des messages en temps réel, nous avons identifié une limite critique de l'architecture purement RPC : le Polling. Dans une approche classique, le client devrait demander périodiquement au serveur "Ai-je de nouveaux messages ?". Cela engendre :
+
+Une latence (l'utilisateur attend la prochaine requête pour voir le message).
+
+Une surcharge inutile du réseau et du serveur (99% des requêtes renvoient "Rien de nouveau").
+
+Notre Solution : Nous avons implémenté le pattern Publish-Subscribe via des WebSockets.
+
+Les Commandes (Login, Post, Envoi Message) restent en RPC Synchrone car l'utilisateur a besoin d'une confirmation immédiate (Transactionnel).
+
+Les Notifications (Réception Message) passent par un Bus d'Événements Asynchrone. Le serveur agit comme un Publisher qui notifie instantanément les clients Subscribers connectés.
+
+Cette séparation des canaux (CQRS simplifié) garantit une réactivité immédiate de l'interface (Client.java) tout en déchargeant le serveur.
 -----
 
 ## 5\. Implémentation et Traçabilité (Prototype)
@@ -407,6 +434,12 @@ Pour garantir la traçabilité exigée, nous avons adopté les conventions de ma
 | **Port (Required)** | **Champ privé** | Le besoin d'un service externe est représenté par une référence privée vers l'interface (ex: `private IStorage storagePort;`). |
 | **Composant** | **Classe** | Une classe Java qui *implements* les interfaces de ses ports fournis. |
 | **Attachment** | **Injection de dépendance** | Lier un port revient à passer l'instance du connecteur ou du composant via un *setter* ou le constructeur dans le `Main`. |
+
+Mapping du Connecteur Événementiel : L'architecture théorique définit un connecteur WS_EventBus. Dans le code, cela se traduit par :
+
+Côté Serveur (ServerMain) : L'utilisation de app.ws("/events", ...) qui instancie le rôle Publisher. Il maintient une Map<User, Session> pour router les événements.
+
+Côté Client (Client.java) : L'utilisation de java.net.http.WebSocket qui implémente le rôle Subscriber. Le port p_event_sub est réifié par l'interface WebSocket.Listener et sa méthode onText(), qui réagit aux interruptions du serveur.
 
 ### 5.3 Extrait de code significatif
 
