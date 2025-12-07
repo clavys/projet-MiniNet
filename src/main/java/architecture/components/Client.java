@@ -2,6 +2,9 @@ package architecture.components;
 
 import framework.Component;
 import architecture.connectors.RPCConnector;
+import front.MiniNet;
+import javafx.application.Application;
+
 import java.util.Scanner;
 
 public class Client extends Component {
@@ -20,8 +23,12 @@ public class Client extends Component {
     // Pour simuler une session (qui est connecté ?)
     private String currentUser = null;
 
+    public static Client instance;
+
     public Client() {
+
         super("Client Console");
+        instance = this;
     }
 
     // --- BINDING (Setters pour l'injection des connecteurs) ---
@@ -31,69 +38,17 @@ public class Client extends Component {
 
     // --- BOUCLE PRINCIPALE (UI) ---
     public void start() {
-        Scanner scanner = new Scanner(System.in);
-        boolean running = true;
+        new Thread(() -> {
+            Application.launch(MiniNet.class);
+        }).start();
+    }
 
-        System.out.println("=================================");
-        System.out.println("   BIENVENUE SUR MININET V1.0    ");
-        System.out.println("=================================");
+    public boolean login(String name, String pass ) {
+        return authConnector.callLogin(name, pass);
+    }
 
-        while (running) {
-            System.out.println("\n--- MENU ---");
-            if (currentUser == null) {
-                // Mode déconnecté
-                System.out.println("1. S'inscrire (Register)");
-                System.out.println("2. Se connecter (Login)");
-                System.out.println("0. Quitter");
-            } else {
-                // Mode connecté : Pseudo en ROUGE comme demandé
-                System.out.println("Connecté en tant que : [" + ANSI_RED + currentUser + ANSI_RESET + "]");
-                System.out.println("---------------------------------");
-                System.out.println("3. Envoyer un message privé");
-                System.out.println("4. Lire mes messages");
-                System.out.println("5. Publier sur le mur (Post)");
-                System.out.println("6. Voir le mur (Fil d'actualité)");
-
-                // --- OPTIONS AJOUTÉES ---
-                System.out.println("7. Ajouter un ami");
-                System.out.println("8. Supprimer un ami");
-                // ------------------------
-
-                System.out.println("9. Se déconnecter");
-                System.out.println("0. Quitter");
-            }
-            System.out.print("Votre choix > ");
-            String choice = scanner.nextLine();
-
-            switch (choice) {
-                // Cas accessibles hors connexion
-                case "1": handleRegister(scanner); break;
-                case "2": handleLogin(scanner); break;
-                case "0":
-                    System.out.println("Au revoir !");
-                    running = false;
-                    break;
-
-                // Cas nécessitant une connexion
-                case "3": if(checkAuth()) handleSendMessage(scanner); break;
-                case "4": if(checkAuth()) handleReadMessages(); break;
-                case "5": if(checkAuth()) handleCreatePost(scanner); break;
-                case "6": if(checkAuth()) handleGetWall(); break;
-
-                // --- CASES AJOUTÉS ---
-                case "7": if(checkAuth()) handleAddFriend(scanner); break;
-                case "8": if(checkAuth()) handleRemoveFriend(scanner); break;
-
-                case "9":
-                    this.currentUser = null;
-                    System.out.println(ANSI_BLUE + ">> Déconnexion réussie." + ANSI_RESET);
-                    break;
-
-                default:
-                    System.out.println("Choix invalide.");
-            }
-        }
-        scanner.close();
+    public void register(String username, String pass) {
+        authConnector.callRegister(username, pass);
     }
 
     // --- HANDLERS (Gestion des actions) ---
