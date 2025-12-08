@@ -9,7 +9,6 @@ public class MiniNet extends Application {
     @Override
     public void start(Stage primaryStage) {
         // On récupère la belle scène créée dans l'autre fichier
-        if(Client.instance.check)
         primaryStage.setScene(LoginView.createScene(primaryStage));
 
         primaryStage.setTitle("MiniNet - Connexion");

@@ -53,6 +53,7 @@ public class LoginView {
             } else {
                 subtitleLabel.setText(">> SUCCESS: ACCESS_GRANTED");
                 subtitleLabel.setTextFill(Color.web("#00FF00"));
+                stage.setScene(HubView.createScene(stage));
             }
         });
 

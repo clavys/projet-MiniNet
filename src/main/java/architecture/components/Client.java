@@ -2,134 +2,114 @@ package architecture.components;
 
 import framework.Component;
 import architecture.connectors.RPCConnector;
-import front.MiniNet;
+import front.MiniNet; // Assure-toi que c'est bien le nom de ta classe Main JavaFX
 import javafx.application.Application;
-
-import java.util.Scanner;
 
 public class Client extends Component {
 
-    // --- COULEURS ANSI (Pour embellir la console) ---
-    public static final String ANSI_RESET = "\u001B[0m";
-    public static final String ANSI_RED = "\u001B[31m";
-    public static final String ANSI_GREEN = "\u001B[32m";
-    public static final String ANSI_BLUE = "\u001B[34m";
-
-    // --- PORTS REQUIS (Via Connecteurs) ---
+    // --- PORTS REQUIS (Connecteurs vers le serveur) ---
     private RPCConnector authConnector;
     private RPCConnector msgConnector;
     private RPCConnector postConnector;
 
-    // Pour simuler une session (qui est connecté ?)
-    private String currentUser = null;
+    // État de la session
+    private String currentUser;
 
+    // Singleton pour Front
     public static Client instance;
 
     public Client() {
-
-        super("Client Console");
+        super("Client Architectural");
         instance = this;
+        currentUser = null;
     }
 
-    // --- BINDING (Setters pour l'injection des connecteurs) ---
-    public void setAuthConnector(RPCConnector c) { this.authConnector = c; }
-    public void setMsgConnector(RPCConnector c) { this.msgConnector = c; }
-    public void setPostConnector(RPCConnector c) { this.postConnector = c; }
-
-    // --- BOUCLE PRINCIPALE (UI) ---
+    public String getUserName(){
+        return currentUser;
+    }
+    // --- DÉMARRAGE ---
     public void start() {
+        // On lance l'interface graphique JavaFX
         new Thread(() -> {
             Application.launch(MiniNet.class);
         }).start();
     }
 
-    public boolean login(String name, String pass ) {
-        return authConnector.callLogin(name, pass);
+    // ==========================================
+    //       API PUBLIQUE (Appelée par l'UI)
+    // ==========================================
+
+    // --- AUTHENTIFICATION ---
+
+    public boolean login(String name, String pass) {
+        boolean success = authConnector.callLogin(name, pass);
+        if (success) {
+            this.currentUser = name;
+            System.out.println("LOG >> Session ouverte pour : " + currentUser);
+        }
+        return success;
     }
 
     public void register(String username, String pass) {
         authConnector.callRegister(username, pass);
     }
 
-    // --- HANDLERS (Gestion des actions) ---
-
-    private void handleRegister(Scanner scanner) {
-        System.out.print("Pseudo : ");
-        String user = scanner.nextLine();
-        System.out.print("Mot de passe : ");
-        String pass = scanner.nextLine();
-        authConnector.callRegister(user, pass);
-        System.out.println(ANSI_GREEN + ">> Demande d'inscription envoyée." + ANSI_RESET);
+    public void logout() {
+        this.currentUser = null;
     }
 
-    private void handleLogin(Scanner scanner) {
-        System.out.print("Pseudo : ");
-        String user = scanner.nextLine();
-        System.out.print("Mot de passe : ");
-        String pass = scanner.nextLine();
+    // --- MESSAGERIE PRIVÉE ---
 
-        boolean success = authConnector.callLogin(user, pass);
-        if (success) {
-            this.currentUser = user;
-            System.out.println(ANSI_GREEN + ">> SUCCÈS : Bienvenue " + user + " !" + ANSI_RESET);
-        } else {
-            System.out.println(ANSI_RED + ">> ÉCHEC : Identifiants incorrects." + ANSI_RESET);
+    public void sendMessage(String to, String message) {
+        if (checkAuth()) {
+            msgConnector.callSendMessage(currentUser, to, message);
         }
     }
 
-    private void handleSendMessage(Scanner scanner) {
-        System.out.print("Destinataire : ");
-        String to = scanner.nextLine();
-        System.out.print("Message : ");
-        String content = scanner.nextLine();
-
-        msgConnector.callSendMessage(currentUser, to, content);
-        System.out.println(ANSI_GREEN + ">> Message envoyé !" + ANSI_RESET);
+    public String readMessage() {
+        if (!checkAuth()) return "Veuillez vous connecter.";
+        return msgConnector.callCheckMessages(currentUser);
     }
 
-    private void handleReadMessages() {
-        String inbox = msgConnector.callCheckMessages(currentUser);
-        System.out.println("\n--- Vos Messages ---");
-        System.out.println(inbox);
-    }
+    // --- MUR / POSTS  ---
 
-    private void handleCreatePost(Scanner scanner) {
-        System.out.print("Contenu du post : ");
-        String content = scanner.nextLine();
-
-        postConnector.callCreatePost(currentUser, content);
-        System.out.println(ANSI_GREEN + ">> Post publié sur votre mur !" + ANSI_RESET);
-    }
-
-    private void handleGetWall() {
-        String wall = postConnector.callGetWall(currentUser);
-        System.out.println(wall);
-    }
-
-    // --- MÉTHODES POUR LES AMIS ---
-
-    private void handleAddFriend(Scanner scanner) {
-        System.out.print("Nom de l'ami à ajouter : ");
-        String friend = scanner.nextLine();
-
-        authConnector.callAddFriend(currentUser, friend);
-        System.out.println(ANSI_GREEN + ">> Ami ajouté (simulé) !" + ANSI_RESET);
-    }
-
-    private void handleRemoveFriend(Scanner scanner) {
-        System.out.print("Nom de l'ami à supprimer : ");
-        String friend = scanner.nextLine();
-
-        authConnector.callRemoveFriend(currentUser, friend);
-        System.out.println(ANSI_GREEN + ">> Ami supprimé !" + ANSI_RESET);
-    }
-
-    // --- UTILITAIRE DE SÉCURITÉ ---
-    private boolean checkAuth() {
-        if (currentUser == null) {
-            System.out.println(ANSI_RED + ">> ERREUR : Vous devez être connecté !" + ANSI_RESET);
-            return false;
+    public void createPost(String content) {
+        if (checkAuth()) {
+            postConnector.callCreatePost(currentUser, content);
         }
-        return true;
     }
+
+    public String getWall() {
+        if (!checkAuth()) return "";
+        // Retourne le String directement pour l'afficher dans le TextArea du Hub
+        return postConnector.callGetWall(currentUser);
+    }
+
+    // --- AMIS ---
+
+    public void addFriend(String friendName) {
+        if (checkAuth()) {
+            authConnector.callAddFriend(currentUser, friendName);
+        }
+    }
+
+    public void removeFriend(String friendName) {
+        if (checkAuth()) {
+            authConnector.callRemoveFriend(currentUser, friendName);
+        }
+    }
+
+    // Check
+    public boolean checkAuth() {
+        return currentUser != null;
+    }
+
+    public String getCurrentUser() {
+        return currentUser;
+    }
+
+    // Injection des dépendances (Binding)
+    public void setAuthConnector(RPCConnector c) { this.authConnector = c; }
+    public void setMsgConnector(RPCConnector c) { this.msgConnector = c; }
+    public void setPostConnector(RPCConnector c) { this.postConnector = c; }
 }
