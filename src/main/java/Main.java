@@ -1,50 +1,23 @@
-// ... imports ...
-
-import architecture.components.*;
+import architecture.components.Client;
 import architecture.connectors.RPCConnector;
-import architecture.connectors.SQLConnector;
-import architecture.components.Storage;
 
 public class Main {
     public static void main(String[] args) {
-// 1. Composants
-        Storage storage = new Storage("URL");
-        UserManager userMgr = new UserManager();
-        MessageService msgSvc = new MessageService(); // <-- Nouveau
-        PostManager postMgr = new PostManager();
+
+        System.out.println("--- Démarrage du Client Console (Distribué) ---");
+
+        // 2. On prépare le Client et son Connecteur
         Client client = new Client();
+        RPCConnector httpConn = new RPCConnector(); // C'est ton nouveau connecteur HTTP
 
-        // 2. Connecteurs
-        SQLConnector sqlConn = new SQLConnector();
-        RPCConnector authConn = new RPCConnector(); // Pour l'auth
-        RPCConnector msgConn = new RPCConnector();  // Pour les messages (ACME: RPC_Msg_Conn)
-        RPCConnector postConn = new RPCConnector();    // Connecteur Post (ACME: RPC_Post_Conn)
+        // 3. On branche le câble réseau
+        // Note: setComponent ne sert plus à rien car l'URL est codée en dur dans le connecteur
+        // Mais on injecte le connecteur dans le client
+        client.setAuthConnector(httpConn);
+        client.setPostConnector(httpConn);
+        client.setMsgConnector(httpConn);
 
-        // 3. Câblage
-
-        // Base de données (Multiplexage)
-        sqlConn.setComponent(storage);
-        userMgr.setDbConnector(sqlConn);
-        msgSvc.setDbConnector(sqlConn);
-        postMgr.setDbConnector(sqlConn);
-
-        //  Côté Client (Front-end) -> Services
-        // Circuit Auth
-        authConn.setComponent(userMgr);
-        client.setAuthConnector(authConn);
-
-        // Circuit Message
-        msgConn.setComponent(msgSvc);   // On branche le connecteur au service
-        client.setMsgConnector(msgConn); // On donne le bout du câble au client
-
-        // Circuit Post
-        postConn.setComponent(postMgr);     // On branche le connecteur sur le PostManager
-        client.setPostConnector(postConn);  // On donne l'autre bout au Client
-
-        // 4. Start
-        client.start();
-
-        // 4. Test du scénario
+        // 4. On lance l'interface
         client.start();
     }
 }
