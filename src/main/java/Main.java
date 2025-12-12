@@ -3,11 +3,12 @@
 import architecture.components.*;
 import architecture.connectors.RPCConnector;
 import architecture.connectors.SQLConnector;
+import architecture.components.Storage;
 
 public class Main {
     public static void main(String[] args) {
 // 1. Composants
-        Storage storage = new Storage();
+        Storage storage = new Storage("URL");
         UserManager userMgr = new UserManager();
         MessageService msgSvc = new MessageService(); // <-- Nouveau
         PostManager postMgr = new PostManager();
