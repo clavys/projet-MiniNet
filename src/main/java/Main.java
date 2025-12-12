@@ -1,3 +1,4 @@
+// ... imports ...
 
 import architecture.components.*;
 import architecture.connectors.RPCConnector;
@@ -43,6 +44,6 @@ public class Main {
         client.start();
 
         // 4. Test du scénario
-        //client.start();
+        client.start();
     }
 }

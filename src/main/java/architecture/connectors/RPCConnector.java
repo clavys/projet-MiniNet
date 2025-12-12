@@ -1,142 +1,220 @@
 package architecture.connectors;
 
 import framework.Connector;
-import architecture.interfaces.IUserPort;
-import architecture.interfaces.IPostPort;
-import architecture.interfaces.IMessagePort;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
-/**
- * Connecteur RPC (Remote Procedure Call)
- * Rôle : Transporter les appels de méthodes du Client vers les Managers.
- * Glue : Synchrone (Call-Return)
- */
 public class RPCConnector extends Connector {
 
-    // Le connecteur peut être relié à l'un de ces trois types de ports
-    private IUserPort userPort;
-    private IPostPort postPort;
-    private IMessagePort msgPort;
+    // L'adresse de VOTRE serveur (Backend)
+    private final String SERVER_URL = "http://localhost:7000";
+
+    // Le client qui sait parler HTTP
+    private final HttpClient client;
 
     public RPCConnector() {
-        super("RPC Call-Return");
+        super("HTTP/REST Glue"); // On change le nom de la Glue
+        this.client = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5)) // Timeout si le serveur est éteint
+                .build();
     }
 
-    /**
-     * Méthode de Binding (Héritée du Framework)
-     * Détecte automatiquement à quel type de composant on se connecte.
-     */
     @Override
     public void setComponent(Object component) {
-        switch (component) {
-            case IUserPort iUserPort -> {
-                this.userPort = iUserPort;
-                printLog("Connecté au port Utilisateur");
-            }
-            case IPostPort iPostPort -> {
-                this.postPort = iPostPort;
-                printLog("Connecté au port Publication");
-            }
-            case IMessagePort iMessagePort -> {
-                this.msgPort = iMessagePort;
-                printLog("Connecté au port Message");
-            }
-            case null, default -> System.err.println("ERREUR : Type de composant incompatible pour RPCConnector");
-        }
+        // Côté Client HTTP, on ne se connecte plus à un objet Java "Component".
+        // On se connecte à une URL. Cette méthode devient vide ou sert à configurer l'URL.
     }
 
+    // =========================================================================
+    //  ADAPTATION : On transforme les méthodes Java en appels HTTP (GET/POST)
+    // =========================================================================
 
-    // SERVICES AUTHENTIFICATION (Relayés vers UserManager)
-
-
-    public void callRegister(String username, String password) {
-        if (userPort != null) {
-            printLog(">> register(" + username + ")");
-            userPort.register(username, password);
-        } else {
-            printError("Register", "UserManager");
-        }
-    }
-
+    // --- LOGIN (Route: GET /login?user=...&pass=...) ---
     public boolean callLogin(String username, String password) {
-        if (userPort != null) {
-            printLog(">> login(" + username + ")");
-            return userPort.login(username, password);
-        } else {
-            printError("Login", "UserManager");
+        try {
+            // 1. On fabrique l'URL
+            String url = SERVER_URL + "/login?user=" + encode(username) + "&pass=" + encode(password);
+
+            // 2. On crée la requête
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
+
+            // 3. On envoie et on attend la réponse
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            // 4. On analyse la réponse (Le serveur renvoie "true" ou "false")
+            return Boolean.parseBoolean(response.body().trim());
+
+        } catch (Exception e) {
+            System.err.println("Erreur HTTP Login : " + e.getMessage());
             return false;
         }
     }
 
-    public void callAddFriend(String currentUser, String friendName) {
-        if (userPort != null) {
-            printLog(">> addFriend(" + currentUser + ", " + friendName + ")");
-            userPort.addFriend(currentUser, friendName);
-        } else {
-            printError("AddFriend", "UserManager");
-        }
-    }
-
-    public void callRemoveFriend(String currentUser, String friendName) {
-        if (userPort != null) {
-            printLog(">> removeFriend(" + currentUser + ", " + friendName + ")");
-            userPort.removeFriend(currentUser, friendName);
-        } else {
-            printError("RemoveFriend", "UserManager");
-        }
-    }
-
-    // SERVICES MESSAGERIE (Relayés vers MessageService)
-
-
-    public void callSendMessage(String from, String to, String content) {
-        if (msgPort != null) {
-            printLog(">> sendMessage(" + from + " -> " + to + ")");
-            msgPort.sendMessage(from, to, content);
-        } else {
-            printError("SendMessage", "MessageService");
-        }
-    }
-
-    public String callCheckMessages(String user) {
-        if (msgPort != null) {
-            printLog(">> checkMessages(" + user + ")");
-            return msgPort.checkMessages(user);
-        } else {
-            printError("CheckMessages", "MessageService");
-            return "Erreur de connexion";
-        }
-    }
-
-
-    // SERVICES PUBLICATION (Relayés vers PostManager)
-
+    // --- CREATE POST (Route: POST /post avec body form-data) ---
     public void callCreatePost(String author, String content) {
-        if (postPort != null) {
-            printLog(">> createPost(" + author + ")");
-            postPort.createPost(author, content);
-        } else {
-            printError("CreatePost", "PostManager");
+        try {
+            // Pour un POST, c'est un peu plus verbeux, on simule un formulaire Web
+            String formData = "author=" + encode(author) + "&content=" + encode(content);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(SERVER_URL + "/post"))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .build();
+
+            client.send(request, HttpResponse.BodyHandlers.ofString());
+            // On ne retourne rien, comme la méthode void originale
+
+        } catch (Exception e) {
+            System.err.println("Erreur HTTP Post : " + e.getMessage());
         }
     }
 
+    // --- GET WALL (Route: GET /wall?user=...) ---
     public String callGetWall(String user) {
-        if (postPort != null) {
-            printLog(">> getWall(" + user + ")");
-            return postPort.getWall(user);
-        } else {
-            printError("GetWall", "PostManager");
-            return "Erreur de connexion";
+        try {
+            String url = SERVER_URL + "/wall?user=" + encode(user);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
+
+        } catch (Exception e) {
+            return "Erreur de connexion au serveur.";
         }
     }
 
-    // --- Utilitaires internes ---
-
-    private void printLog(String msg) {
-        // Simule le passage réseau
-        System.out.println("   [RPC-Transport] " + msg);
+    // --- Utilitaire pour gérer les espaces et caractères spéciaux dans les URL ---
+    private String encode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private void printError(String method, String target) {
-        System.err.println("   [RPC-Erreur] Impossible d'appeler " + method + " : Le connecteur n'est pas relié au " + target);
+    // --- REGISTER (Route: POST /register) ---
+    public void callRegister(String username, String password) {
+        try {
+            // On prépare les données (user=...&pass=...)
+            String formData = "user=" + encode(username) + "&pass=" + encode(password);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(SERVER_URL + "/register"))
+                    .header("Content-Type", "application/x-www-form-urlencoded") // Important pour Javalin .formParam()
+                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .build();
+
+            // On envoie
+            client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("   [HTTP] Inscription envoyée pour " + username);
+
+        } catch (Exception e) {
+            System.err.println("Erreur HTTP Register : " + e.getMessage());
+        }
+    }
+
+    // --- MESSAGERIE PRIVÉE ---
+
+    // Envoi : POST /message (car on crée une donnée)
+    // Note : Il faut que ton binôme ajoute app.post("/message", ...) côté Serveur !
+    public void callSendMessage(String from, String to, String content) {
+        try {
+            String formData = "from=" + encode(from) + "&to=" + encode(to) + "&content=" + encode(content);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(SERVER_URL + "/message")) // Assure-toi que cette route existe côté Serveur
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .build();
+
+            client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        } catch (Exception e) {
+            System.err.println("Erreur HTTP SendMessage : " + e.getMessage());
+        }
+    }
+
+    // Lecture : GET /messages?user=...
+    public String callCheckMessages(String user) {
+        try {
+            String url = SERVER_URL + "/messages?user=" + encode(user);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
+
+        } catch (Exception e) {
+            return "Erreur lecture messages.";
+        }
+    }
+
+    // --- AMIS (Si tu l'as implémenté) ---
+
+    public void callAddFriend(String currentUser, String friendName) {
+        // Tu peux utiliser une route POST /friend
+        try {
+            String formData = "user=" + encode(currentUser) + "&friend=" + encode(friendName);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(SERVER_URL + "/friend"))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .build();
+            client.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception e) { e.printStackTrace(); }
+    }
+
+    // --- SUPPRIMER UN AMI ---
+    // Route : POST /removeFriend
+    public void callRemoveFriend(String currentUser, String friendName) {
+        try {
+            // On prépare les données (user=...&friend=...)
+            String formData = "user=" + encode(currentUser) + "&friend=" + encode(friendName);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(SERVER_URL + "/removeFriend")) // Route spécifique pour la suppression
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(formData))
+                    .build();
+
+            // On envoie la requête
+            client.send(request, HttpResponse.BodyHandlers.ofString());
+            System.out.println("   [HTTP] Suppression d'ami demandée : " + friendName);
+
+        } catch (Exception e) {
+            System.err.println("Erreur HTTP RemoveFriend : " + e.getMessage());
+        }
+    }
+
+    // Récupérer la liste des amis
+    public String callGetFriends(String user) {
+        try {
+            String url = SERVER_URL + "/friends?user=" + encode(user);
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body(); // Retourne "Titi,Toto,..."
+        } catch (Exception e) { return "Erreur réseau"; }
+    }
+
+    // Récupérer les recommandations
+    public String callGetRecommendations(String user) {
+        try {
+            String url = SERVER_URL + "/recommendations?user=" + encode(user);
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            return response.body();
+        } catch (Exception e) { return "Erreur réseau"; }
     }
 }

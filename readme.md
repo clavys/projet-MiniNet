@@ -91,6 +91,13 @@ Les composants suivants ont été identifiés pour couvrir les exigences fonctio
 * **Services Fournis :** `save()`, `find()`.
 * **Ports :**
     * *Provided :* SQLInterface.
+ 
+#### **6. RecommendationService (Extension)**
+* **Description :** Composant hybride gérant le graphe d'amis en mémoire pour des calculs rapides.
+* **Services Fournis :** `getRecommendations()`, `getFriends()`.
+* **Ports :**
+    * *Provided :* RecoInterface (HTTP).
+    * *Required :* DatabaseAccess (pour la synchronisation au démarrage et à l'écriture).
 
 ### 2.2 Connecteurs et Interactions (Instances)
 
@@ -116,6 +123,19 @@ Voici la suite de votre rapport, formatée en **Markdown (.md)**. Elle reprend e
 
 Cette section couvre la spécification formelle (ACME), la justification des choix (crucial pour la note) et les détails d'implémentation.
 
+### 2.4 Évolution vers une architecture Distribuée et Persistante
+
+L'architecture initiale a été enrichie pour répondre à des contraintes de scalabilité et de persistance :
+
+Serveur d'Application : Le backend expose désormais une API REST (via Javalin) permettant au Client de s'exécuter sur une machine distante.
+
+Persistance SQL : Les données ne sont plus volatiles mais stockées dans des bases de données SQLite.
+
+Data Sharding (Répartition) : Pour améliorer les performances, nous avons implémenté une stratégie de sharding au niveau du connecteur de données.
+
+Le système instancie 3 composants Storage distincts : un pour les utilisateurs, un pour les posts, un pour les messages.
+
+Le SQLConnector agit comme un routeur intelligent : il analyse la table demandée (USERS, POSTS, etc.) et dirige la requête vers la bonne instance de base de données. Cela permet de séparer physiquement les données sans changer le code des composants métier (Manager).
 -----
 
 
@@ -126,83 +146,138 @@ Cette section présente la description formelle de l'main.java.architecture du s
 ```acme
 System MiniNet = {
 
-  // --- DÉCLARATION DES COMPOSANTS ---
+  // ==========================================
+  // 1. COMPOSANTS (Frontend & Backend)
+  // ==========================================
 
   Component Client = {
-      Port p_auth_req;  // Vers UserManager
-      Port p_post_req;  // Vers PostManager
-      Port p_msg_req;   // Vers MessageService
+      // Ports RPC (Synchrones)
+      Port p_auth_req;
+      Port p_post_req;
+      Port p_msg_req;
+      Port p_reco_req;
+      
+      // NOUVEAU : Port pour écouter les événements (Asynchrone)
+      Port p_event_sub;
   }
 
   Component UserManager = {
-      Port p_auth_prov; // Reçoit auth
-      Port p_db_user;   // Vers Storage
-      Property services = { "login", "register", "addFriend", "removeFriend" };
+      Port p_auth_prov;
+      Port p_db_user;
+      Property services = { "login", "register" };
   }
 
   Component PostManager = {
-      Port p_post_prov; // Reçoit commandes posts
-      Port p_db_post;   // Vers Storage
+      Port p_post_prov;
+      Port p_db_post;
       Property services = { "createPost", "getWall" };
   }
 
   Component MessageService = {
-      Port p_msg_prov;  // Reçoit commandes messages
-      Port p_db_msg;    // Vers Storage
+      Port p_msg_prov;
+      Port p_db_msg;
+      
+      // NOUVEAU : Port pour publier les notifications
+      Port p_notif_pub;
+      
       Property services = { "sendMessage", "readMessages" };
   }
 
-  Component Storage = {
-      Port p_db_prov;   // Fournit accès données
-      Property engine = "In-Memory / SQL Simulation";
+  Component RecommendationService = {
+      Port p_reco_prov;
+      Port p_db_req;
+      Property services = { "addFriend", "getRecommendations" };
   }
 
-  // --- DÉCLARATION DES CONNECTEURS ---
+  // ==========================================
+  // 2. COMPOSANTS DE DONNÉES (Sharding)
+  // ==========================================
 
-  // Connecteur générique RPC pour les interactions Client -> Managers
-  Connector RPC_Auth_Conn = {
-      Role caller;
-      Role called;
-      Property glue = "Synchronous Call-Return";
+  Component StorageUsers = {
+      Port p_db_prov;
+      Property db_file = "users.db";
+  }
+   
+  Component StoragePosts = {
+      Port p_db_prov;
+      Property db_file = "posts.db";
+  }
+   
+  Component StorageMsgs = {
+      Port p_db_prov;
+      Property db_file = "messages.db";
   }
 
-  Connector RPC_Post_Conn = {
-      Role caller;
-      Role called;
-      Property glue = "Synchronous Call-Return";
+  // ==========================================
+  // 3. CONNECTEURS
+  // ==========================================
+
+  // --- A. Connecteur RPC (Commandes) ---
+  Connector HTTP_Connector = {
+      Role caller_auth; 
+      Role caller_post; 
+      Role caller_msg;
+      Role caller_reco;
+      
+      Role called_auth; 
+      Role called_post; 
+      Role called_msg;
+      Role called_reco;
+      
+      Property glue = "REST / JSON over HTTP (Synchrone)";
   }
 
-  Connector RPC_Msg_Conn = {
-      Role caller;
-      Role called;
-      Property glue = "Synchronous Call-Return";
-  }
-
-  // Connecteur de données pour l'accès au stockage
-  Connector SQL_Link = {
+  // --- B. Connecteur SQL (Persistance) ---
+  Connector SQL_Router_Conn = {
       Role requester;
-      Role responder;
-      Property glue = "JDBC / Query Transport";
+      Role responder_u;
+      Role responder_p;
+      Role responder_m;
+      Property glue = "JDBC Routing (Switch on Table Name)";
   }
 
-  // --- ATTACHMENTS (Câblage du système) ---
+  // --- C. NOUVEAU : Connecteur Événementiel ---
+  Connector WS_EventBus = {
+      Role publisher;   // Pour celui qui émet (Serveur)
+      Role subscriber;  // Pour celui qui écoute (Client)
+      
+      Property glue = "WebSocket / Pub-Sub (Asynchrone)";
+  }
 
-  // 1. Connexions Client -> Managers
-  Attachment Client.p_auth_req to RPC_Auth_Conn.caller;
-  Attachment RPC_Auth_Conn.called to UserManager.p_auth_prov;
+  // ==========================================
+  // 4. ATTACHMENTS (Câblage)
+  // ==========================================
 
-  Attachment Client.p_post_req to RPC_Post_Conn.caller;
-  Attachment RPC_Post_Conn.called to PostManager.p_post_prov;
+  // --- Câblage RPC (Client -> Managers) ---
+  Attachment Client.p_auth_req to HTTP_Connector.caller_auth;
+  Attachment HTTP_Connector.called_auth to UserManager.p_auth_prov;
 
-  Attachment Client.p_msg_req to RPC_Msg_Conn.caller;
-  Attachment RPC_Msg_Conn.called to MessageService.p_msg_prov;
+  Attachment Client.p_post_req to HTTP_Connector.caller_post;
+  Attachment HTTP_Connector.called_post to PostManager.p_post_prov;
 
-  // 2. Connexions Managers -> Storage (Multiplexage sur le connecteur SQL)
-  Attachment UserManager.p_db_user to SQL_Link.requester;
-  Attachment PostManager.p_db_post to SQL_Link.requester;
-  Attachment MessageService.p_db_msg to SQL_Link.requester;
+  Attachment Client.p_msg_req to HTTP_Connector.caller_msg;
+  Attachment HTTP_Connector.called_msg to MessageService.p_msg_prov;
+
+  Attachment Client.p_reco_req to HTTP_Connector.caller_reco;
+  Attachment HTTP_Connector.called_reco to RecommendationService.p_reco_prov;
+
+  // --- Câblage SQL (Managers -> Storage) ---
+  Attachment UserManager.p_db_user to SQL_Router_Conn.requester;
+  Attachment PostManager.p_db_post to SQL_Router_Conn.requester;
+  Attachment MessageService.p_db_msg to SQL_Router_Conn.requester;
+  Attachment RecommendationService.p_db_req to SQL_Router_Conn.requester;
+   
+  Attachment SQL_Router_Conn.responder_u to StorageUsers.p_db_prov;
+  Attachment SQL_Router_Conn.responder_p to StoragePosts.p_db_prov;
+  Attachment SQL_Router_Conn.responder_m to StorageMsgs.p_db_prov;
+
+  // --- NOUVEAU : Câblage WebSocket (Notifications) ---
   
-  Attachment SQL_Link.responder to Storage.p_db_prov;
+  // 1. Le MessageService publie sur le Bus
+  Attachment MessageService.p_notif_pub to WS_EventBus.publisher;
+
+  // 2. Le Client souscrit au Bus
+  Attachment Client.p_event_sub to WS_EventBus.subscriber;
 }
 ```
 
@@ -230,6 +305,74 @@ Pour les interactions entre le Client et les Managers, nous utilisons une Glue d
 
   * **Justification :** L'expérience utilisateur (UX) d'un réseau social nécessite souvent un retour immédiat (savoir si le login a réussi, si le message est envoyé). Un modèle asynchrone aurait complexifié inutilement le client (gestion de callbacks) pour ce type d'opérations simples.
 
+### 4.4 Connecteur Intelligent pour le Sharding
+
+Nous avons choisi d'implémenter la logique de répartition des données (Sharding) à l'intérieur du SQLConnector plutôt que dans les Managers.
+
+ * **Justification :** C'est un respect strict du principe de séparation des préoccupations. Les composants métier (UserManager, etc.) ne doivent pas savoir combien de bases de données existent ni où elles se trouvent. Ils envoient simplement une requête "Sauvegarde ceci". C'est la responsabilité du connecteur ("la glue") de savoir où et comment acheminer cette donnée. Cela permet d'ajouter de nouvelles bases de données (ex: une pour les Logs) en modifiant uniquement la configuration du connecteur, sans toucher au code métier.
+
+### 4.4.1 Raffinement du Composant Storage : Configurabilité et Sharding
+Dans la première itération du prototype, le composant Storage était conçu de manière rigide : chaque instance initialisait systématiquement l'ensemble du schéma de base de données (tables USERS, POSTS, MESSAGES, FRIENDS).
+
+Cela posait un problème de cohérence avec notre stratégie de Sharding (répartition des données). Par exemple, le fichier posts.db contenait des tables vides USERS et MESSAGES, créant une "pollution" du schéma et une ambiguïté sur la localisation réelle des données.
+
+Nous avons donc refactorisé le composant Storage pour le rendre générique et configurable.
+
+Modification : Le constructeur du composant accepte désormais une liste variable d'arguments définissant les tables autorisées (String... tables).
+
+Principe Architectural : Cette approche respecte le principe d'Inversion de Contrôle. Ce n'est pas le composant qui décide de sa structure, mais la Configuration (le Main) qui lui injecte sa "responsabilité" au moment de l'instanciation.
+
+Gain obtenu :
+
+Isolation stricte : L'instance StoragePosts ne connaît physiquement que la table POSTS. Il est impossible d'y insérer accidentellement un utilisateur, ce qui renforce la robustesse du partitionnement.
+
+Réutilisabilité : La même classe Storage est utilisée pour trois contextes différents sans modification du code source, validant l'approche "Boîte Noire" des composants logiciels.
+
+### 4.5 Extension : Service de Recommandation Hybride
+
+Pour la fonctionnalité avancée de suggestion d'amis, nous avons intégré un composant `RecommendationService`.
+
+* **Choix Architectural : Persistance Synchronisée (Write-Through)**
+    Pour concilier performance algorithmique et persistance des données, nous avons opté pour une architecture hybride :
+
+    1.  **Graphe en Mémoire (Lecture Rapide)** : Au démarrage, le composant charge toutes les relations depuis `StorageUsers` (via le connecteur SQL) et construit un graphe d'objets en mémoire. Cela permet d'effectuer des algorithmes de traversée de graphe (recommandations, calcul de distance) avec une complexité temporelle très faible, impossible à obtenir avec de simples requêtes SQL.
+    2.  **Persistance SQL (Écriture Sécurisée)** : Lorsqu'un client ajoute ou supprime un ami, la modification est appliquée **immédiatement** au graphe en mémoire (pour la réactivité) ET envoyée au `StorageUsers` via le connecteur SQL (pour la durabilité).
+
+    *Justification :* Ce découpage respecte le principe de responsabilité unique (SRP). Le `UserManager` gère les comptes (identité), tandis que le `RecommendationService` gère la topologie du réseau social.
+  
+### 4.6 Respect du Principe "Open/Closed" (Évolutivité du Connecteur)
+Dans une démarche d'amélioration de la qualité architecturale, nous avons retravaillé le SQLConnector pour qu'il respecte le principe Open/Closed (ouvert à l'extension, fermé à la modification).
+
+Problème initial : La première version du connecteur utilisait un routage statique (switch/case sur les noms de tables). L'ajout d'une nouvelle fonctionnalité (ex: gestion de Groupes) aurait obligé à modifier le code source du connecteur, créant un couplage fort et un risque de régression.
+
+Solution mise en œuvre : Nous sommes passés à un routage dynamique via une table de hachage (Map<String, IStoragePort>). Les routes ne sont plus codées en dur mais injectées par la configuration (ServerMain) au démarrage via la méthode registerRoute().
+
+Justification : Ce choix rend le connecteur totalement générique. Il agit comme un bus de données agnostique qui peut supporter une infinité de nouvelles tables ou de bases de données sans qu'aucune ligne de son code ne doive être réécrite. Cela garantit une modularité parfaite entre l'infrastructure de communication et les règles métier.
+
+### 4.7 Sécurisation des Données Sensibles (Hashing SHA-256)
+La gestion des identifiants est un point critique de tout système social. Stocker les mots de passe en clair dans la base de données (comme c'était le cas dans le prototype initial) représentait une vulnérabilité majeure : en cas de fuite de la base users.db, tous les comptes auraient été compromis.
+
+Amélioration technique : Nous avons intégré un mécanisme de hachage cryptographique utilisant l'algorithme SHA-256 (natif via java.security.MessageDigest).
+
+À l'inscription : Le mot de passe est immédiatement transformé en une empreinte hexadécimale avant d'être transmis au connecteur de stockage. Le composant Storage ne connaît jamais le mot de passe réel.
+
+À la connexion : Le mot de passe saisi est haché à la volée et comparé à l'empreinte stockée.
+
+### 4.8 Transition vers une Architecture Hybride (RPC + Événementielle)
+
+Pour la gestion des messages en temps réel, nous avons identifié une limite critique de l'architecture purement RPC : le Polling. Dans une approche classique, le client devrait demander périodiquement au serveur "Ai-je de nouveaux messages ?". Cela engendre :
+
+Une latence (l'utilisateur attend la prochaine requête pour voir le message).
+
+Une surcharge inutile du réseau et du serveur (99% des requêtes renvoient "Rien de nouveau").
+
+Notre Solution : Nous avons implémenté le pattern Publish-Subscribe via des WebSockets.
+
+Les Commandes (Login, Post, Envoi Message) restent en RPC Synchrone car l'utilisateur a besoin d'une confirmation immédiate (Transactionnel).
+
+Les Notifications (Réception Message) passent par un Bus d'Événements Asynchrone. Le serveur agit comme un Publisher qui notifie instantanément les clients Subscribers connectés.
+
+Cette séparation des canaux (CQRS simplifié) garantit une réactivité immédiate de l'interface (Client.java) tout en déchargeant le serveur.
 -----
 
 ## 5\. Implémentation et Traçabilité (Prototype)
@@ -291,6 +434,12 @@ Pour garantir la traçabilité exigée, nous avons adopté les conventions de ma
 | **Port (Required)** | **Champ privé** | Le besoin d'un service externe est représenté par une référence privée vers l'interface (ex: `private IStorage storagePort;`). |
 | **Composant** | **Classe** | Une classe Java qui *implements* les interfaces de ses ports fournis. |
 | **Attachment** | **Injection de dépendance** | Lier un port revient à passer l'instance du connecteur ou du composant via un *setter* ou le constructeur dans le `main.java.Main`. |
+
+Mapping du Connecteur Événementiel : L'architecture théorique définit un connecteur WS_EventBus. Dans le code, cela se traduit par :
+
+Côté Serveur (ServerMain) : L'utilisation de app.ws("/events", ...) qui instancie le rôle Publisher. Il maintient une Map<User, Session> pour router les événements.
+
+Côté Client (Client.java) : L'utilisation de java.net.http.WebSocket qui implémente le rôle Subscriber. Le port p_event_sub est réifié par l'interface WebSocket.Listener et sa méthode onText(), qui réagit aux interruptions du serveur.
 
 ### 5.3 Extrait de code significatif
 
