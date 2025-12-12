@@ -8,7 +8,7 @@
 
 ## 1. Définition du Métamodèle Architectural (Niveau M2)
 
-Cette section décrit les concepts fondamentaux utilisés pour modéliser notre architecture. Conformément aux bonnes pratiques d'ingénierie logicielle, notre métamodèle repose sur une séparation stricte entre le calcul (Composants) et la communication (Connecteurs).
+Cette section décrit les concepts fondamentaux utilisés pour modéliser notre main.java.architecture. Conformément aux bonnes pratiques d'ingénierie logicielle, notre métamodèle repose sur une séparation stricte entre le calcul (Composants) et la communication (Connecteurs).
 
 ### 1.1 Éléments Structurels
 
@@ -50,7 +50,7 @@ Cette section décrit les concepts fondamentaux utilisés pour modéliser notre 
 
 ## 2. Description Architecturale de MiniNet (Niveau M1)
 
-L'architecture de MiniNet est une instanciation du métamodèle M2 décrit ci-dessus. Elle vise à fournir un mini réseau social permettant l'inscription, la publication de messages et la gestion d'amis.
+L'main.java.architecture de MiniNet est une instanciation du métamodèle M2 décrit ci-dessus. Elle vise à fournir un mini réseau social permettant l'inscription, la publication de messages et la gestion d'amis.
 
 ### 2.1 Composants du Système (Instances)
 
@@ -110,7 +110,7 @@ Les connecteurs définissent les modes d'interaction :
 
 ### 2.3 Matrice de Traçabilité (M2 vers M1 vers ACME)
 
-Ce tableau illustre la correspondance entre notre métamodèle, l'architecture concrète et sa représentation potentielle en langage de description d'architecture (ADL/ACME).
+Ce tableau illustre la correspondance entre notre métamodèle, l'main.java.architecture concrète et sa représentation potentielle en langage de description d'main.java.architecture (ADL/ACME).
 
 | Concept M2 | Élément MiniNet (M1) | Traduction ACME (Exemple) |
 | :--- | :--- | :--- |
@@ -141,7 +141,7 @@ Le SQLConnector agit comme un routeur intelligent : il analyse la table demandé
 
 ## 3. Spécification Formelle (ACME)
 
-Cette section présente la description formelle de l'architecture du système MiniNet en utilisant une syntaxe proche du langage de description d'architecture (ADL) ACME. Cette formalisation permet de vérifier la cohérence structurelle de notre assemblage.
+Cette section présente la description formelle de l'main.java.architecture du système MiniNet en utilisant une syntaxe proche du langage de description d'main.java.architecture (ADL) ACME. Cette formalisation permet de vérifier la cohérence structurelle de notre assemblage.
 
 ```acme
 System MiniNet = {
@@ -382,17 +382,17 @@ Le prototype a été développé en Java en respectant strictement le métamodè
 
 ### 5.1 Structure du Code (Packages)
 
-L'organisation des fichiers du prototype a été conçue pour mettre en évidence la traçabilité explicite entre l'architecture définie et le code, conformément aux objectifs du projet. Elle reflète la distinction stricte entre le niveau d'abstraction (M2) et l'application concrète (M1).
+L'organisation des fichiers du prototype a été conçue pour mettre en évidence la traçabilité explicite entre l'main.java.architecture définie et le code, conformément aux objectifs du projet. Elle reflète la distinction stricte entre le niveau d'abstraction (M2) et l'application concrète (M1).
 
 Voici l'arborescence détaillée du projet Java :
 
 ```text
 src/
-├── framework/                 <-- Niveau M2 (Abstractions)
+├── main.java.framework/                 <-- Niveau M2 (Abstractions)
 │   ├── Component.java         (Classe abstraite de base)
 │   └── Connector.java         (Classe abstraite de base)
 │
-├── architecture/              <-- Niveau M1 (Implémentation MiniNet)
+├── main.java.architecture/              <-- Niveau M1 (Implémentation MiniNet)
 │   ├── interfaces/            (Réification des Ports Fournis)
 │   │   ├── IUserPort.java
 │   │   ├── IPostPort.java
@@ -408,16 +408,16 @@ src/
 │       ├── RPCConnector.java
 │       └── SQLConnector.java
 │
-└── Main.java                  <-- Configuration (Instanciation & Binding)
+└── main.java.Main.java                  <-- Configuration (Instanciation & Binding)
 ```
 
 **Description des paquetages :**
 
-  * **`src/framework/`** : Ce package implémente les concepts du métamodèle architectural défini dans notre diagramme de classe M2. Il contient les classes abstraites `Component` et `Connector` héritant de la notion d'élément architectural. Ce code est générique et garantit que le prototype respecte la structure définie.
-  * **`src/architecture/interfaces/`** : Ce package contient les définitions des **Ports Fournis**. Dans notre implémentation, les ports sont modélisés par des interfaces Java, respectant le principe selon lequel le composant contient directement ses définitions de services.
-  * **`src/architecture/components/`** : Contient les implémentations concrètes des composants fonctionnels qui encapsulent les fonctionnalités du système (Gestion utilisateurs, Posts, etc.). Ces classes héritent de `framework.Component`.
-  * **`src/architecture/connectors/`** : Contient la logique de "Glue" encapsulée dans des classes héritant de `framework.Connector`. Ces classes définissent concrètement les modes d'interaction (appel de procédure RPC ou requête SQL) entre les composants.
-  * **`src/Main.java`** : Ce fichier représente la classe **Configuration** du métamodèle M2. Elle a la responsabilité de contenir les instances et les liens. C'est ici que sont instanciés les composants et que les liens d'attachement (*Attachments*) sont créés pour assembler le système final.
+  * **`src/main.java.framework/`** : Ce package implémente les concepts du métamodèle architectural défini dans notre diagramme de classe M2. Il contient les classes abstraites `Component` et `Connector` héritant de la notion d'élément architectural. Ce code est générique et garantit que le prototype respecte la structure définie.
+  * **`src/main.java.architecture/interfaces/`** : Ce package contient les définitions des **Ports Fournis**. Dans notre implémentation, les ports sont modélisés par des interfaces Java, respectant le principe selon lequel le composant contient directement ses définitions de services.
+  * **`src/main.java.architecture/components/`** : Contient les implémentations concrètes des composants fonctionnels qui encapsulent les fonctionnalités du système (Gestion utilisateurs, Posts, etc.). Ces classes héritent de `main.java.framework.Component`.
+  * **`src/main.java.architecture/connectors/`** : Contient la logique de "Glue" encapsulée dans des classes héritant de `main.java.framework.Connector`. Ces classes définissent concrètement les modes d'interaction (appel de procédure RPC ou requête SQL) entre les composants.
+  * **`src/main.java.Main.java`** : Ce fichier représente la classe **Configuration** du métamodèle M2. Elle a la responsabilité de contenir les instances et les liens. C'est ici que sont instanciés les composants et que les liens d'attachement (*Attachments*) sont créés pour assembler le système final.
 
 <!-- end list -->
 
@@ -433,7 +433,7 @@ Pour garantir la traçabilité exigée, nous avons adopté les conventions de ma
 | **Port (Provided)** | **Interface Java** | Une interface (ex: `IAuthService`) définit le contrat public du port. |
 | **Port (Required)** | **Champ privé** | Le besoin d'un service externe est représenté par une référence privée vers l'interface (ex: `private IStorage storagePort;`). |
 | **Composant** | **Classe** | Une classe Java qui *implements* les interfaces de ses ports fournis. |
-| **Attachment** | **Injection de dépendance** | Lier un port revient à passer l'instance du connecteur ou du composant via un *setter* ou le constructeur dans le `Main`. |
+| **Attachment** | **Injection de dépendance** | Lier un port revient à passer l'instance du connecteur ou du composant via un *setter* ou le constructeur dans le `main.java.Main`. |
 
 Mapping du Connecteur Événementiel : L'architecture théorique définit un connecteur WS_EventBus. Dans le code, cela se traduit par :
 
@@ -443,7 +443,7 @@ Côté Client (Client.java) : L'utilisation de java.net.http.WebSocket qui impl�
 
 ### 5.3 Extrait de code significatif
 
-Cet extrait du `Main.java` montre comment la configuration architecturale est traduite en code :
+Cet extrait du `main.java.Main.java` montre comment la configuration architecturale est traduite en code :
 
 ```java
 
@@ -453,7 +453,7 @@ Cet extrait du `Main.java` montre comment la configuration architecturale est tr
 
 ## Conclusion tentative
 
-Ce projet a permis de mettre en pratique les principes de l'architecture logicielle basée sur les composants et connecteurs. En partant d'un métamodèle (M2) clair, nous avons pu concevoir une architecture (M1) modulaire pour le système MiniNet.
+Ce projet a permis de mettre en pratique les principes de l'main.java.architecture logicielle basée sur les composants et connecteurs. En partant d'un métamodèle (M2) clair, nous avons pu concevoir une main.java.architecture (M1) modulaire pour le système MiniNet.
 
 L'implémentation du prototype a mis en évidence l'intérêt de cette approche : bien que plus verbeuse initialement que du code "spaghetti", elle offre une structure rigide qui force le découplage. Le système final respecte les contraintes de séparation et permettrait, théoriquement, de remplacer n'importe quel composant (comme la base de données ou l'interface client) sans impact majeur sur le reste du système.
 

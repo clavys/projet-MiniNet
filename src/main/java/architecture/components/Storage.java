@@ -24,6 +24,7 @@ public class Storage extends Component implements IStoragePort {
         initDB();
     }
 
+
     private void initDB() {
         try {
             Class.forName("org.sqlite.JDBC");

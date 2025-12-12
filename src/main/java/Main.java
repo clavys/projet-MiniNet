@@ -6,9 +6,6 @@ public class Main {
 
         System.out.println("--- Démarrage du Client Console (Distribué) ---");
 
-        // 1. On ne crée PLUS le backend (Storage, UserManager...) ici !
-        // Ils sont gérés par le ServerMain de ton binôme.
-
         // 2. On prépare le Client et son Connecteur
         Client client = new Client();
         RPCConnector httpConn = new RPCConnector(); // C'est ton nouveau connecteur HTTP
@@ -21,7 +18,6 @@ public class Main {
         client.setMsgConnector(httpConn);
 
         // 4. On lance l'interface
-        // IMPORTANT : Il faut que ServerMain tourne DÉJÀ dans une autre fenêtre !
         client.start();
     }
 }
