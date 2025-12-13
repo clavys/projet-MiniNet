@@ -10,6 +10,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
+import javafx.application.Platform;
 
 public class Client extends Component {
 
@@ -24,6 +26,7 @@ public class Client extends Component {
     // Maintien de la connexion WebSocket
     private WebSocket eventBusSocket;
 
+    private Consumer<String> uiCallback;
     // Singleton pour accès facile depuis le Front
     public static Client instance;
 
@@ -38,6 +41,7 @@ public class Client extends Component {
             Application.launch(MiniNet.class);
         }).start();
     }
+
 
     // ==========================================
     //       API PUBLIQUE (Appelée par l'UI)
@@ -137,6 +141,10 @@ public class Client extends Component {
         return "Vous connaissez peut-être :\n? " + rawResponse.replace(",", "\n? ");
     }
 
+    public void setUiCallback(Consumer<String> callback) {
+        this.uiCallback = callback;
+    }
+
 
     // ==========================================
     //       GESTION WEBSOCKET (Event Bus)
@@ -144,7 +152,6 @@ public class Client extends Component {
 
     private void connectToEventBus(String username) {
         try {
-            // L'URL du WebSocket (Backend Javalin)
             String wsUrl = "ws://localhost:7000/events?user=" + username;
 
             this.eventBusSocket = HttpClient.newHttpClient()
@@ -153,13 +160,22 @@ public class Client extends Component {
 
                         @Override
                         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-                            // Au lieu d'afficher dans la console, on loggue via le framework
-                            // Idéalement, ici on pourrait déclencher une mise à jour de l'UI via un Observer pattern
-                            printLog("[NOTIFICATION REÇUE] " + data);
+
+                            // 1. Log console (comme avant)
+                            printLog("[WS REÇU] " + data);
+
+                            // 2. NOUVEAU : On prévient l'interface graphique
+                            if (uiCallback != null) {
+                                // Important : On repasse sur le thread JavaFX pour modifier l'UI
+                                Platform.runLater(() -> {
+                                    uiCallback.accept(data.toString());
+                                });
+                            }
+
                             return WebSocket.Listener.super.onText(webSocket, data, last);
                         }
                     })
-                    .join(); // On attend que la connexion se fasse
+                    .join();
 
             printLog("Connecté au Bus d'événements (WebSocket).");
 

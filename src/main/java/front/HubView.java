@@ -155,11 +155,20 @@ public class HubView {
         msgDisplay.setEditable(false);
         styleTerminalTextArea(msgDisplay);
 
-        // Bouton Rafraichir
-        Button btnRefresh = createMenuButton("[ REFRESH INBOX ]");
-        btnRefresh.setOnAction(e -> msgDisplay.setText(Client.instance.readMessage()));
+        // 1. On définit ce qui doit se passer quand une notif arrive
+        Client.instance.setUiCallback(notification -> {
+            // notification contient le texte envoyé par le serveur
+            System.out.println("UI >> Mise à jour déclenchée par WebSocket");
 
-        // Chargement initial
+            // On recharge simplement tous les messages pour être à jour
+            String refreshContent = Client.instance.readMessage();
+            msgDisplay.setText(refreshContent);
+
+            // Petit bonus visuel
+            msgDisplay.appendText("\n[SYNC] Live update received.");
+        });
+
+        // 2. On charge les messages une première fois (comme avant)
         msgDisplay.setText(Client.instance.readMessage());
 
         // --- Compose (Écriture) ---
@@ -192,7 +201,7 @@ public class HubView {
 
         composeBox.getChildren().addAll(toField, bodyField, btnSend);
 
-        content.getChildren().addAll(title, lblInbox, msgDisplay, btnRefresh, new Separator(), lblCompose, composeBox);
+        content.getChildren().addAll(title, lblInbox, msgDisplay, new Separator(), lblCompose, composeBox);
         mainLayout.setCenter(content);
     }
 
