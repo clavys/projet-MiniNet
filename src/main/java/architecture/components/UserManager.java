@@ -41,15 +41,21 @@ public class UserManager extends Component implements IUserPort {
     }
 
     @Override
-    public void register(String username, String password) {
-        // SÉCURITÉ : On ne stocke plus "123" mais "a665a45920422f9d417e4867efdc4fb8..."
+    public boolean register(String username, String password) {
+        //  VÉRIFICATION : L'utilisateur existe-t-il déjà ?
+        if (dbConnector.findRecord("USERS", username) != null) {
+            printLog("Échec de l'enregistrement : l'utilisateur " + username + " existe déjà.");
+            return false; // L'enregistrement a échoué (utilisateur déjà existant)
+        }
+
+        // 2. Si l'utilisateur n'existe pas, on procède à l'enregistrement.
         String hashedPassword = hash(password);
 
         String userData = "PASS=" + hashedPassword + ";ROLE=USER";
 
         printLog("Enregistrement sécurisé de " + username);
-        // Le stockage ne voit jamais le vrai mot de passe
         dbConnector.saveRecord("USERS", username, userData);
+        return true;
     }
 
     @Override
