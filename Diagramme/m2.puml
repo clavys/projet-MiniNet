@@ -1,0 +1,88 @@
+@startuml
+skinparam classAttributeIconSize 1
+skinparam linetype polyline
+
+title Métamodèle ASA M2
+
+' --- ELEMENTS ARCHITECTURAUX ---
+
+class Configuration {
+    ' La Configuration est maintenant un Composant composite
+}
+
+class Composant {
+    + proprietes : Map<String, String>
+    + contraintesTechinques : Map<String, String>
+}
+
+class Connecteur {
+    + glue : String
+}
+
+abstract class Role
+
+' --- POINTS D'INTERACTION ---
+
+abstract class Port
+class ProvidedPort
+class RequiredPort
+
+abstract class Service
+class ProvidedService
+class RequiredService
+
+' --- LIENS D'ARCHITECTURE ---
+
+class Attachment
+class Binding
+
+' =========================================================
+' CONFIGURATION EST UN COMPOSANT
+' =========================================================
+' Cela permet à la Configuration d'avoir ses propres Ports
+' et simplifie la logique du Binding (delegation).
+Composant <|-- Configuration
+
+' Héritage des Ports et Services
+Port <|-- ProvidedPort
+Port <|-- RequiredPort
+Service <|-- ProvidedService
+Service <|-- RequiredService
+
+' =========================================================
+' STRUCTURE INTERNE
+' =========================================================
+
+' Un composant possède des Ports...
+Composant *-- "0..*" Port
+' ...et des Services
+Composant *-- "0..*" Service
+
+' Un connecteur possède des Rôles
+Connecteur *-- "1..*" Role
+
+' La Configuration contient les instances et les liens
+Configuration *-- "0..*" Composant : instances
+Configuration *-- "0..*" Connecteur
+Configuration *-- "0..*" Attachment
+Configuration *-- "0..*" Binding
+
+' =========================================================
+' LIEN PORT <-> SERVICE
+' =========================================================
+' Un Port n'est plus "vide", il expose ou requiert un Service précis.
+ProvidedPort --> "1..*" ProvidedService : expose >
+RequiredPort --> "1..*" RequiredService : requiert >
+
+' =========================================================
+' DEFINITION DES LIENS
+' =========================================================
+
+' Attachment : Relie un Port (Composant) à un Rôle (Connecteur)
+Attachment --> "1" Port
+Attachment --> "1" Role
+
+' Binding : Relie un Port (Configuration/Parent) à un Port (Composant/Enfant)
+Binding --> "1" Port : port_externe (config)
+Binding --> "1" Port : port_interne (instance)
+@enduml
