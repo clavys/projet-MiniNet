@@ -3,7 +3,7 @@ package architecture.components;
 import framework.Component;
 import architecture.interfaces.IMessagePort;
 import architecture.connectors.SQLConnector;
-import java.util.Map;
+import java.util.*;
 
 public class MessageService extends Component implements IMessagePort {
 
@@ -19,12 +19,9 @@ public class MessageService extends Component implements IMessagePort {
 
     @Override
     public void sendMessage(String from, String to, String content) {
-        // ASTUCE : On met le nom de l'expéditeur DANS l'identifiant du message
-        // Exemple d'ID généré : "Toto_1709887654321"
+        // ID unique : "EXPEDITEUR_TIMESTAMP"
         String msgId = from + "_" + System.currentTimeMillis();
-
-        // Le contenu contient le destinataire pour le filtrage
-        // Exemple de Data : "Titi:Salut ça va ?"
+        // Contenu : "DESTINATAIRE:MESSAGE"
         String data = to + ":" + content;
 
         printLog("Envoi message de " + from + " vers " + to);
@@ -33,36 +30,40 @@ public class MessageService extends Component implements IMessagePort {
 
     @Override
     public String checkMessages(String user) {
-        printLog("Récupération des messages pour " + user);
-
-        // 1. On récupère TOUT (via le connecteur, c'est propre architecturalement)
+        // 1. On récupère TOUS les messages de la base
         Map<String, String> allMsgs = dbConnector.findAllRecords("MESSAGES");
 
-        StringBuilder sb = new StringBuilder();
-        boolean found = false;
+        // Liste pour stocker l'historique brut
+        List<String> history = new ArrayList<>();
 
         for (Map.Entry<String, String> entry : allMsgs.entrySet()) {
             String key = entry.getKey();   // Ex: "Toto_1709887654321"
             String val = entry.getValue(); // Ex: "Titi:Salut ça va ?"
 
-            // 2. On vérifie si c'est pour nous (ça commence par "Moi:")
-            if (val.startsWith(user + ":")) {
+            try {
+                // Analyse des clés/valeurs
+                String[] keyParts = key.split("_");
+                String sender = keyParts[0];
+                long timestamp = Long.parseLong(keyParts[1]);
 
-                // 3. On extrait le message pur (après le "Moi:")
-                String content = val.split(":", 2)[1];
+                String[] valParts = val.split(":", 2);
+                String recipient = valParts[0];
+                String content = valParts[1];
 
-                // 4. ON RECUPERE L'EXPEDITEUR DEPUIS LA CLÉ !
-                // On prend ce qu'il y a avant le "_"
-                String senderInfo = key.split("_")[0];
-
-                sb.append(" - De [").append(senderInfo).append("] : ").append(content).append("\n");
-                found = true;
+                // FILTRE : Est-ce que ce message me concerne ? (Envoyé par moi OU Reçu par moi)
+                if (sender.equals(user) || recipient.equals(user)) {
+                    // Format => TIMESTAMP::SENDER::RECIPIENT::CONTENT
+                    history.add(timestamp + "::" + sender + "::" + recipient + "::" + content);
+                }
+            } catch (Exception e) {
+                // Ignorer les messages mal formés
             }
         }
 
-        if (!found) {
-            return "Vous n'avez aucun nouveau message.";
-        }
-        return sb.toString();
+        // 2. TRI CHRONOLOGIQUE, comparaison des timestamps
+        Collections.sort(history);
+
+        // On renvoie tout sous forme d'un gros bloc de texte
+        return String.join("\n", history);
     }
 }
