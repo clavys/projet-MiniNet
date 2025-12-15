@@ -1,7 +1,6 @@
 @startuml
 skinparam classAttributeIconSize 1
 skinparam linetype polyline
-
 title Métamodèle ASA M2
 
 ' --- ELEMENTS ARCHITECTURAUX ---

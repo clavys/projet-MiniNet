@@ -1,0 +1,216 @@
+@startuml
+' --- STYLE ---
+skinparam backgroundColor white
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 40
+
+skinparam object {
+    BackgroundColor<<Composant>> AliceBlue
+    BorderColor<<Composant>> DeepSkyBlue
+    BackgroundColor<<Connecteur>> MistyRose
+    BorderColor<<Connecteur>> FireBrick
+    BackgroundColor<<Port>> Gold
+    BackgroundColor<<Role>> LightGreen
+    BackgroundColor<<Service>> LavenderBlush
+    ArrowColor Black
+}
+
+title Architecture M1 : MiniNet avec Recommandation Hybride
+
+' --- FRONTEND ---
+package "Frontend (Client)" {
+    object "Client : Composant" as Client <<Composant>> {
+        nom = "MiniNet_v1"
+    }
+    object "p_auth_req" as p_cl_auth <<Port>>
+    object "p_post_req" as p_cl_post <<Port>>
+    object "p_msg_req" as p_cl_msg <<Port>>
+    ' Port pour taper sur le RecoService
+    object "p_reco_req" as p_cl_reco <<Port>>
+    object "p_event_sub" as p_cl_event_sub <<Port>>
+}
+
+' --- CONNECTEURS ---
+package "Connecteurs Distribués" {
+    object "HTTP_RPC : Connecteur" as C_HTTP <<Connecteur>> {
+        glue = "REST / HTTP POST & GET"
+    }
+
+    object "WS_EVENT : Connecteur" as C_WS <<Connecteur>> {
+        glue = "WebSocket / Asynchrone"
+    }
+
+    ' Rôles Clients
+    object "r_callers..." as r_http_callers <<Role>>
+
+    ' Rôles Serveurs (Détaillés pour la clarté)
+    object "called_auth" as r_called_auth <<Role>>
+    object "called_post" as r_called_post <<Role>>
+    object "called_msg" as r_called_msg <<Role>>
+    object "called_reco" as r_called_reco <<Role>>
+
+    ' Rôle pour celui qui envoie (Serveur)
+    object "r_publisher" as r_ws_pub <<Role>>
+    ' Rôle pour celui qui écoute (Client)
+    object "r_subscriber" as r_ws_sub <<Role>>
+}
+
+' --- BACKEND ---
+package "Backend (Serveur)" {
+
+    object "UserManager" as UserMgr <<Composant>> {
+        __ Services __
+        login(), register()
+    }
+    object "p_um_auth" as p_um_auth <<Port>>
+    object "p_um_db" as p_um_db <<Port>>
+
+    ' --- NOUVEAU COMPOSANT ---
+    object "RecommendationService" as RecoSvc <<Composant>> {
+        __ Properties __
+        Structure = "In-Memory Graph"
+        Sync = "Write-Through to DB"
+        __ Services __
+        addFriend(), removeFriend()
+        getFriends(), getRecommendations()
+    }
+    object "p_reco_prov" as p_rs_reco <<Port>>
+    object "p_rs_db" as p_rs_db <<Port>>
+
+    object "PostManager" as PostMgr <<Composant>> {
+        __ Services __
+        createPost(), getWall()
+    }
+    object "p_pm_post" as p_pm_post <<Port>>
+    object "p_pm_db" as p_pm_db <<Port>>
+
+    object "MessageService" as MsgSvc <<Composant>> {
+        __ Services __
+        sendMessage(), checkMessages()
+    }
+    object "p_notif_pub" as p_ms_notif <<Port>>
+    object "p_ms_msg" as p_ms_msg <<Port>>
+    object "p_ms_db" as p_ms_db <<Port>>
+
+}
+
+' --- DATA LAYER ---
+package "Couche de Données" {
+
+    object "SQL_Router : Connecteur" as C_SQL <<Connecteur>> {
+        glue = "JDBC / Sharding Logic"
+    }
+
+    object "req_sql" as r_sql_req <<Role>>
+    object "res_sql..." as r_sql_res <<Role>>
+
+    object "StorageUsers" as St_Users <<Composant>> {
+        file = "users.db"
+    }
+    object "p_st_users" as p_st_users <<Port>>
+
+    object "StoragePosts" as St_Posts <<Composant>> {
+        file = "posts.db"
+    }
+    object "p_st_posts" as p_st_posts <<Port>>
+
+    object "StorageMsgs" as St_Msgs <<Composant>> {
+        file = "messages.db"
+    }
+    object "p_st_msgs" as p_st_msgs <<Port>>
+}
+
+' ==========================================
+' ALIGNEMENT
+' ==========================================
+Client -[hidden]-> C_HTTP
+C_HTTP -[hidden]-> UserMgr
+UserMgr -[hidden]-> RecoSvc
+RecoSvc -[hidden]-> PostMgr
+PostMgr -[hidden]-> MsgSvc
+MsgSvc -[hidden]-> C_SQL
+C_SQL -[hidden]-> St_Users
+St_Users -[hidden]-> St_Posts
+St_Posts -[hidden]-> St_Msgs
+
+' ==========================================
+' RELATIONS DE COMPOSITION
+' ==========================================
+Client *-- p_cl_auth
+Client *-- p_cl_post
+Client *-- p_cl_msg
+Client *-- p_cl_reco
+
+C_HTTP *-- r_http_callers
+C_HTTP *-- r_called_auth
+C_HTTP *-- r_called_post
+C_HTTP *-- r_called_msg
+C_HTTP *-- r_called_reco
+
+UserMgr *-- p_um_auth
+UserMgr *-- p_um_db
+
+RecoSvc *-- p_rs_reco
+RecoSvc *-- p_rs_db
+
+PostMgr *-- p_pm_post
+PostMgr *-- p_pm_db
+
+MsgSvc *-- p_ms_msg
+MsgSvc *-- p_ms_db
+
+C_SQL *-- r_sql_req
+C_SQL *-- r_sql_res
+
+St_Users *-- p_st_users
+St_Posts *-- p_st_posts
+St_Msgs *-- p_st_msgs
+
+' ==========================================
+' CÂBLAGE (Attachments)
+' ==========================================
+
+' 1. Client -> HTTP (Tous partent du rôle caller générique ou spécifique)
+p_cl_auth ..> r_http_callers
+p_cl_post ..> r_http_callers
+p_cl_msg ..> r_http_callers
+p_cl_reco ..> r_http_callers
+
+' 2. HTTP -> Backend Managers
+r_called_auth ..> p_um_auth : <<Attachment>>
+r_called_post ..> p_pm_post : <<Attachment>>
+r_called_msg ..> p_ms_msg : <<Attachment>>
+r_called_reco ..> p_rs_reco : <<Attachment>>
+
+' 3. Managers -> SQL Connector
+p_um_db ..> r_sql_req : <<Attachment>>
+p_pm_db ..> r_sql_req : <<Attachment>>
+p_ms_db ..> r_sql_req : <<Attachment>>
+p_rs_db ..> r_sql_req : <<Persist>>
+
+' 4. SQL Router -> Stockage
+r_sql_res ..> p_st_users
+r_sql_res ..> p_st_posts
+r_sql_res ..> p_st_msgs
+
+' ==========================================
+' AJOUTS WEBSOCKET (COMPOSITION & LIENS)
+' ==========================================
+
+' 1. On attache les nouveaux ports aux composants parents
+Client *-- p_cl_event_sub
+MsgSvc *-- p_ms_notif
+C_WS   *-- r_ws_pub
+C_WS   *-- r_ws_sub
+
+' 2. Le MessageService PUBLIE (se branche sur le rôle Publisher)
+p_ms_notif ..> r_ws_pub : <<Attachment>>
+
+' 3. Le Client SOUSCRIT (se branche sur le rôle Subscriber)
+p_cl_event_sub ..> r_ws_sub : <<Attachment>>
+
+' 4. (Optionnel) Une flèche visuelle pour montrer le flux
+r_ws_pub .down.> r_ws_sub : "Push Event"
+
+@enduml
